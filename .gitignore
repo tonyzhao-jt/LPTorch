@@ -1,0 +1,9 @@
+.nv
+.python_history
+*.so
+.ssh
+*.pyc
+/__pycache__/
+*/__pycache__/
+*.egg-info/
+*.o
