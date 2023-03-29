@@ -39,5 +39,5 @@ setup(
         'build_ext': cpp_extension.BuildExtension.with_options(use_ninja=False)
     },
     packages=find_packages(
-        exclude=['notebook', 'scripts', 'tests']),
+        exclude=['notebook', 'scripts', 'tests', 'bench']),
 )
