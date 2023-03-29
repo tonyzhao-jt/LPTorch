@@ -12,5 +12,5 @@ if [ "$(docker ps -aq -f name=$CONT_NAME)" ]; then
     docker start $CONT_NAME
     exit 0
 fi
-docker run --net=host --gpus all --name $CONT_NAME -v $ROOT_PATH:/workspace -it juntao/lptorch:0.1 
+docker run --net=host --gpus all --name $CONT_NAME -v $ROOT_PATH:/workspace/lptorch -it juntao/lptorch:0.1 
 

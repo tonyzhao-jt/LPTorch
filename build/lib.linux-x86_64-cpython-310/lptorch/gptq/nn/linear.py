@@ -138,13 +138,13 @@ class QuantLinear(nn.Module):
         output_dtype = x.dtype
         x = x.to(intermediate_dtype)
         if self.bits == 2:
-            qfunc.vecquant2matmul(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
+            qfunc.vecquant2matmul_torch(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
         elif self.bits == 3:
-            qfunc.vecquant3matmul(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
+            qfunc.vecquant3matmul_torch(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
         elif self.bits == 4:
-            qfunc.vecquant4matmul(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
+            qfunc.vecquant4matmul_torch(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
         elif self.bits == 8:
-            qfunc.vecquant8matmul(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
+            qfunc.vecquant8matmul_torch(x, self.qweight, y, self.scales, self.qzeros, self.groupsize)
         else:
             raise NotImplementedError("Only 2,3,4,8 bits are supported.")
         y = y.to(output_dtype)
