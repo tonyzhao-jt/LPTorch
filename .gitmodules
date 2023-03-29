@@ -1,0 +1,6 @@
+[submodule "3rd_party/torch-int"]
+	path = 3rd_party/torch-int
+	url = https://github.com/Guangxuan-Xiao/torch-int.git
+[submodule "3rd_party/cutlass"]
+	path = 3rd_party/cutlass
+	url = https://github.com/NVIDIA/cutlass.git
