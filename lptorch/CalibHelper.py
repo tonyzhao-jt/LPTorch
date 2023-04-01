@@ -16,6 +16,7 @@ class CalibHelper:
     def __init__(self, model) -> None:
         self.forward_hook_targets = [nn.Linear, nn.Conv2d]
         self.assign_unique_id_to_all_layers(model)
+        self.default_hook = self.int_scale_forward_hook
         pass
     
 
@@ -43,12 +44,26 @@ class CalibHelper:
         else:
             self.collected_calib_data[unique_id] = 0.9 * self.collected_calib_data[unique_id] + 0.1 * input_record.detach().cpu()
         return output
+
+    def int_scale_forward_hook(self, module, input, output):
+        unique_id = module.unique_id
+        x = get_first_output(input)
+        y_gt = get_first_output(output)
+        x_scale = x.abs().max() / 127
+        y_scale = y_gt.abs().max() / 127
+        # running mean
+        if unique_id not in self.collected_calib_data:
+            self.collected_calib_data[unique_id] = [x_scale.detach().cpu(), y_scale.detach().cpu()]  # store in cpu
+        else:
+            self.collected_calib_data[unique_id] = [0.9 * self.collected_calib_data[unique_id][0] + 0.1 * x_scale.detach().cpu(), 
+                                                    0.9 * self.collected_calib_data[unique_id][1] + 0.1 * y_scale.detach().cpu()]
+        return output
     
     def register_forward_hooks(self):
         self.fwd_hooks = []
         for layer_id, layer in self.id_to_layer.items():
             if type(layer) in self.forward_hook_targets:
-                hook = layer.register_forward_hook(self.torch_int_forward_hook)
+                hook = layer.register_forward_hook(self.default_hook)
                 self.fwd_hooks.append(hook)
         self.collected_calib_data = {}
 

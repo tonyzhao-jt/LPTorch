@@ -66,12 +66,12 @@ def test_ada_linear():
     bit = 8
     # test different cases
     # gptq
-    gptq_linear = construct_quantized_linear(linear, bit, sample_x, constructor='gptq')
+    gptq_linear = construct_quantized_linear(linear, bit, constructor='gptq')
     gptq_time, ref_out = run_on_cuda(sample_x, gptq_linear, x_dtype=torch.float16)
     ic(gptq_time)
     ic(ref_out.dtype)
     # bitsandbytes
-    bitsandbytes_linear = construct_quantized_linear(linear, bit, sample_x, constructor='bitsandbytes')
+    bitsandbytes_linear = construct_quantized_linear(linear, bit, constructor='bitsandbytes')
     bitsandbytes_time, ref_out = run_on_cuda(sample_x, bitsandbytes_linear, x_dtype=torch.float16)
     ic(bitsandbytes_time)
     ic(ref_out.dtype)
@@ -82,17 +82,17 @@ def test_ada_linear():
     cap = get_capability()
     if cap >= 75:
         # CUTLASS SUPPORT ONLY AMPHERE AND TURING
-        torch_int_linear = construct_quantized_linear(linear, bit, sample_x, constructor='torch_int', LinearType='W8A8B8O8Linear')
+        torch_int_linear = construct_quantized_linear(linear, bit, sample_input=sample_x, constructor='torch_int', LinearType='W8A8B8O8Linear')
         torch_int_time_888, ref_out = run_on_cuda(qx, torch_int_linear, x_dtype=torch.int8)
         ic(torch_int_time_888)
         ic(ref_out.dtype)
         # 8832
-        torch_int_linear = construct_quantized_linear(linear, bit, sample_x, constructor='torch_int', LinearType='W8A8BFP32OFP32Linear')
+        torch_int_linear = construct_quantized_linear(linear, bit, sample_input=sample_x, constructor='torch_int', LinearType='W8A8BFP32OFP32Linear')
         torch_int_time_8832, ref_out = run_on_cuda(qx, torch_int_linear, x_dtype=torch.int8)
         ic(torch_int_time_8832)
         ic(ref_out.dtype)
         # 81616
-        torch_int_linear = construct_quantized_linear(linear, bit, sample_x, constructor='torch_int', LinearType='W8A16Linear')
+        torch_int_linear = construct_quantized_linear(linear, bit, sample_input=sample_x, constructor='torch_int', LinearType='W8A16Linear')
         torch_int_time_81616, ref_out = run_on_cuda(qx, torch_int_linear, x_dtype=torch.float16)
         ic(torch_int_time_81616)
         ic(ref_out.dtype)
@@ -100,21 +100,21 @@ def test_ada_linear():
     # AdaQLinear
     input_bit = 8
     kernel_bit = 8
-    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_x, cap)
+    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, device_cap=cap)
     # print(ada_linear.pre_forward_quantizer if ada_linear.pre_forward_quantizer is not None else 'None')
     ada_linear_time_8, ref_out = run_on_cuda(qx, ada_linear, x_dtype=torch.int8)
     ic(ada_linear_time_8)
     ic(ref_out.dtype)
     
     input_bit = 16
-    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_x, cap)
+    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, device_cap=cap)
     ada_linear_time_16, ref_out = run_on_cuda(sample_x, ada_linear, x_dtype=torch.float16)
     ic(ada_linear_time_16)
     ic(ref_out.dtype)
 
     input_bit = 16
     kernel_bit = 16
-    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_x, cap)
+    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, device_cap=cap)
     ada_linear_time_1616, ref_out = run_on_cuda(sample_x, ada_linear, x_dtype=torch.float16)
     ic(ada_linear_time_1616)
     ic(ref_out.dtype)

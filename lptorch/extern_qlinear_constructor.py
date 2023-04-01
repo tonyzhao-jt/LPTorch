@@ -21,13 +21,8 @@ def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
     qlayer.pack(layer, quantizer.scale, quantizer.zero)
     return qlayer
 
-def torch_int_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None, LinearType='W8A8B8O8Linear'):
-    layer, sample_input = uniform_dtype((layer, sample_input), dtype=torch.float32)
-    x = sample_input
-    x_scale = x.abs().max() / 127
-    y_gt = layer(sample_input)
-    y_scale = y_gt.abs().max() / 127
 
+def torch_int_constructor_withscale(layer:nn.Module, bit:int, x_scale, y_scale, LinearType='W8A8B8O8Linear'):
     if LinearType == 'W8A8B8O8Linear':
         QLinearType = W8A8B8O8Linear
         q_linear = QLinearType.from_float(layer, x_scale, y_scale)
@@ -43,6 +38,15 @@ def torch_int_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=No
     else:
         q_linear = layer # didn't do anything
     return q_linear
+
+def torch_int_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None, LinearType='W8A8B8O8Linear'):
+    layer, sample_input = uniform_dtype((layer, sample_input), dtype=torch.float32)
+    x = sample_input
+    x_scale = x.abs().max() / 127
+    y_gt = layer(sample_input)
+    y_scale = y_gt.abs().max() / 127
+    return torch_int_constructor_withscale(layer, bit, x_scale, y_scale, LinearType=LinearType)
+
 
 def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
     # get layer weight dim
@@ -64,8 +68,8 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
 
 
 
-def construct_quantized_linear(layer:nn.Module, bit:int, sample_input:torch.Tensor=None, constructor:str='gptq', \
-                               LinearType='W8A8B8O8Linear'):
+def construct_quantized_linear(layer:nn.Module, bit:int, constructor:str='gptq', \
+                               sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, LinearType='W8A8B8O8Linear'):
     assert isinstance(layer, nn.Linear), "Only support linear layer"
     if constructor is None or bit < 8:
         # only gptq support bit < 8
@@ -73,6 +77,8 @@ def construct_quantized_linear(layer:nn.Module, bit:int, sample_input:torch.Tens
     elif constructor == 'gptq':
         constructor = gptq_constructor
     elif constructor == 'torch_int':
+        if x_scale is not None and y_scale is not None:
+            return torch_int_constructor_withscale(layer, bit, x_scale, y_scale, LinearType=LinearType)
         return torch_int_constructor(layer, bit, sample_input, LinearType=LinearType)
     elif constructor == 'bitsandbytes':
         constructor = bitsandbytes_consttuctor
