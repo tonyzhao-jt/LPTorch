@@ -55,15 +55,34 @@ class CalibHelper:
     def remove_forward_hooks(self):
         for hook in self.fwd_hooks:
             hook.remove()
-
     
     def get_module_calib_data(self, module):
         return self.collected_calib_data[module.unique_id]
+    
+    def clear_calib_data(self):
+        self.collected_calib_data = {}
 
-    # for some case, we may need to let users 
+    # Hanlde the distributed case
+    # The calib data collection may be decoupled with the quantization. 
+    def save_calib_data(self, path="./calib_data.pkl"):
+        torch.save(self.collected_calib_data, path)
+        pass
+
+    # load calib data from disk
+    def load_calib_data(self, path="./calib_data.pkl"):
+        self.collected_calib_data = torch.load(path)
+        pass
+
     def set_module_calib_data_to_module(self):
         for unique_id, calib_data in self.collected_calib_data.items():
             self.id_to_layer[unique_id].calib_data = calib_data
             self.id_to_layer[unique_id].has_calib_data = True
+    
+    # remove
+    def remove_calib_data_from_module(self):
+        for unique_id, calib_data in self.collected_calib_data.items():
+            self.id_to_layer[unique_id].calib_data = None
+            self.id_to_layer[unique_id].has_calib_data = False
+    
 
     
