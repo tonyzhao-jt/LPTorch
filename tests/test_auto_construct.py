@@ -26,5 +26,12 @@ def test_calib():
     calib_d_2 = caliber.get_module_calib_data(linear2)
     ada_linear_2 = AdaQLinear(linear2, 16, 8, calib_d_2, cap)
 
+    caliber.set_module_calib_data_to_module()
+    print(linear.has_calib_data)
+    print(linear.calib_data)
+
+    print(linear2.has_calib_data)
+    print(linear2.calib_data)
+
 if __name__ == "__main__":
     test_calib()

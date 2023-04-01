@@ -60,4 +60,10 @@ class CalibHelper:
     def get_module_calib_data(self, module):
         return self.collected_calib_data[module.unique_id]
 
+    # for some case, we may need to let users 
+    def set_module_calib_data_to_module(self):
+        for unique_id, calib_data in self.collected_calib_data.items():
+            self.id_to_layer[unique_id].calib_data = calib_data
+            self.id_to_layer[unique_id].has_calib_data = True
+
     
