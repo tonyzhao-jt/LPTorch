@@ -13,11 +13,15 @@ def get_first_output(output):
 
 
 class CalibHelper:
-    def __init__(self, model) -> None:
+    def __init__(self, model:nn.Module=None) -> None:
         self.forward_hook_targets = [nn.Linear, nn.Conv2d]
+        if model is not None:
+            self.set_model(model)
+        pass
+    
+    def set_model(self, model):
         self.assign_unique_id_to_all_layers(model)
         self.default_hook = self.int_scale_forward_hook
-        pass
     
 
     def assign_unique_id_to_all_layers(self, model:nn.Module):

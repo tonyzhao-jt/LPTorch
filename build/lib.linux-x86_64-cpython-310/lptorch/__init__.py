@@ -5,6 +5,7 @@ from .AdaQLinear import AdaQLinear, quantize_linear_module_with_bit
 from .CalibHelper import CalibHelper
 
 from .config import is_available_q_method
+from ._globals import inner_caliber
 
 import os
 # SET DEFAULT QUANTIZATION METHOD
