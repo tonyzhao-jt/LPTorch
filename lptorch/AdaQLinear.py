@@ -3,7 +3,7 @@ from torch import nn
 
 import os
 
-from .utils import uniform_dtype
+from .utils import uniform_dtype, get_capability
 from .config import is_available_bit
 # implementation of self-qlinear: AdaQLinear
 # the adaint constructor supposed to
@@ -51,8 +51,11 @@ class ForwardTokenizer(nn.Module):
             self.tokenizer = self.fp16_to_int8
             self.tokenizer_type = "fp16_to_int8"
         else:
-            # self.tokenizer = lambda x: x # empty function
-            self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
+            if input_bit == output_bit and input_bit == 8:
+                self.tokenizer = lambda x: x # empty function
+            else:
+                # force converting to FP16. This is the default behavior
+                self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
             self.tokenizer_type = "empty"
         
         self.y_scale = y_scale
@@ -101,11 +104,6 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
                             sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
                             device_cap=70, output_bit=16):
     layer_type = 'FP16'
-    # deal with the case > 8 bit
-    if kernel_bit >= 16:
-        inner_layer = layer.to(torch.float16) # use fp16 by default
-        # do nothing
-        return inner_layer, None, None, layer_type
     Q_METHOD = os.environ.get('Q_METHOD')
     # print("Q_METHOD: ", Q_METHOD, kernel_bit)
     if Q_METHOD == 'GPTQ':
@@ -147,10 +145,10 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
 
 class AdaQLinear(nn.Module):
     def __init__(self, layer:nn.Module, input_bit:int, kernel_bit:int, \
-                 sample_input:torch.Tensor=None, x_scale=None, y_scale=None, \
-                 device_cap:int=70):
+                 sample_input:torch.Tensor=None, x_scale=None, y_scale=None):
         super().__init__()
         is_available_bit(kernel_bit)
+        device_cap = get_capability()
         self.input_bit = input_bit
         self.kernel_bit = kernel_bit
 
@@ -163,18 +161,27 @@ class AdaQLinear(nn.Module):
         self.after_tokenizer_dispatch = False
 
         layer_type = 'FP16'
-        assert sample_input is not None or (x_scale is not None and y_scale is not None), "Either sample_input or x_scale and y_scale is required"
-        if x_scale is not None and y_scale is not None:
+        # deal with the case > 8 bit
+        if kernel_bit >= 16:
+            inner_layer = layer.to(torch.float16) # use fp16 by default
+            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = inner_layer, None, None
+        else:
+            if sample_input is not None:
+                # make sure sample is fp16
+                sample_input = sample_input.to(torch.float16)
+                # construct the inner layer
             self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
-                construct_inner_kernel(layer, input_bit, kernel_bit, x_scale=x_scale, y_scale=y_scale, device_cap=device_cap)
-        if sample_input is not None:
-            # make sure sample is fp16
-            sample_input = sample_input.to(torch.float16)
-            # construct the inner layer
-            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
-                construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, device_cap=device_cap)
+                construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale, device_cap=device_cap)
         
         self.layer_type = layer_type
+    
+    def print_status(self):
+        # if layer name if has
+        if hasattr(self, 'name'):
+            print("Layer Name: ", self.name)
+        print("Layer Type: ", self.layer_type)
+        print("Pre Tokenizer: ", self.pre_forward_quantizer)
+        print("After Tokenizer: ", self.after_forward_quantizer)
         
     def dispatch_pre_tokenizer(self):
         if self.pre_forward_quantizer:
@@ -190,3 +197,35 @@ class AdaQLinear(nn.Module):
         if not self.after_tokenizer_dispatch and self.after_forward_quantizer:
             output = self.after_forward_quantizer(output)
         return output
+    
+# iteratively quantize all linear in the module
+def quantize_linear_module_with_bit(module, kernel_bit=8, caliber=None, input_bit=16):
+    def quantize_linear_inner(module):
+        for name, child in module.named_children():
+            if isinstance(child, AdaQLinear):
+                continue
+            if isinstance(child, nn.Linear):
+                x_scale, y_scale = None, None
+                sample_input = None
+                layer_name = name
+                if caliber is not None:
+                    calib_d_1 = caliber.get_module_calib_data(child)
+                    if calib_d_1 is not None:
+                        if type(calib_d_1) == list and len(calib_d_1) == 2:
+                            x_scale, y_scale = calib_d_1
+                        else:
+                            sample_input = calib_d_1
+                        layer_name = child.unique_id
+                ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale)
+                ada_qli.name = layer_name
+                setattr(module, name, ada_qli)
+            quantize_linear_inner(child)
+    quantize_linear_inner(module)
+
+def print_all_qli_status_in_module(module):
+    def print_qli_status_inner(module):
+        for name, child in module.named_children():
+            if isinstance(child, AdaQLinear):
+                child.print_status()
+            print_qli_status_inner(child)
+    print_qli_status_inner(module)

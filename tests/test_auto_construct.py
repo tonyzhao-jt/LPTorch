@@ -22,8 +22,8 @@ def test_calib():
 
     calib_d_1 = caliber.get_module_calib_data(linear)
     x_scale, y_scale = calib_d_1
-    ada_linear_1 = AdaQLinear(linear, 16, 8, x_scale=x_scale, y_scale=y_scale, device_cap=cap)
-    # ada_linear_1 = AdaQLinear(linear, 16, 8, sample_input=calib_d_1, device_cap=cap)
+    ada_linear_1 = AdaQLinear(linear, 16, 8, x_scale=x_scale, y_scale=y_scale)
+    # ada_linear_1 = AdaQLinear(linear, 16, 8, sample_input=calib_d_1)
 
     # not that must run on cuda
     ada_linear_1_cuda = ada_linear_1.cuda()
@@ -33,7 +33,7 @@ def test_calib():
 
     calib_d_2 = caliber.get_module_calib_data(linear2)
     x_scale, y_scale = calib_d_2
-    ada_linear_2 = AdaQLinear(linear2, 16, 8, x_scale=x_scale, y_scale=y_scale, device_cap=cap)
+    ada_linear_2 = AdaQLinear(linear2, 16, 8, x_scale=x_scale, y_scale=y_scale)
 
     # not that must run on cuda
     ada_linear_2_cuda = ada_linear_2.cuda()

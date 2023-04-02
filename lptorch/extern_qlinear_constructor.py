@@ -79,6 +79,7 @@ def construct_quantized_linear(layer:nn.Module, bit:int, constructor:str='gptq',
     elif constructor == 'gptq':
         constructor = gptq_constructor
     elif constructor == 'torch_int':
+        assert sample_input is not None or (x_scale is not None and y_scale is not None), "Either sample_input or x_scale and y_scale is required for torch_int"
         if x_scale is not None and y_scale is not None:
             return torch_int_constructor_withscale(layer, bit, x_scale, y_scale, LinearType=LinearType)
         return torch_int_constructor(layer, bit, sample_input, LinearType=LinearType)

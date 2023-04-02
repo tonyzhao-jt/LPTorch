@@ -72,6 +72,8 @@ class CalibHelper:
             hook.remove()
     
     def get_module_calib_data(self, module):
+        if module.unique_id not in self.collected_calib_data:
+            return None
         return self.collected_calib_data[module.unique_id]
     
     def clear_calib_data(self):
