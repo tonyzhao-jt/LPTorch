@@ -2,6 +2,8 @@ from lptorch import CalibHelper, AdaQLinear
 from lptorch.utils import get_capability
 import torch
 import torch.nn as nn 
+
+@torch.no_grad()
 def test_calib():
     cap = get_capability()
     # sample case

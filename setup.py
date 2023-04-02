@@ -40,4 +40,7 @@ setup(
     },
     packages=find_packages(
         exclude=['notebook', 'scripts', 'tests', 'bench']),
+    install_requires=[
+        'icecream',
+    ],
 )

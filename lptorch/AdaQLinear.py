@@ -1,7 +1,10 @@
 import torch 
 from torch import nn 
-from .utils import uniform_dtype
 
+import os
+
+from .utils import uniform_dtype
+from .config import is_available_bit
 # implementation of self-qlinear: AdaQLinear
 # the adaint constructor supposed to
 # Dtype
@@ -48,7 +51,8 @@ class ForwardTokenizer(nn.Module):
             self.tokenizer = self.fp16_to_int8
             self.tokenizer_type = "fp16_to_int8"
         else:
-            self.tokenizer = lambda x: x # empty function
+            # self.tokenizer = lambda x: x # empty function
+            self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
             self.tokenizer_type = "empty"
         
         self.y_scale = y_scale
@@ -73,42 +77,80 @@ class ForwardTokenizer(nn.Module):
     def __repr__(self): 
         return self.tokenizer_type
 
+def construct_torch_int(layer:nn.Module, input_bit:int, kernel_bit:int, \
+                            sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
+                            output_bit=16):
+    # Cal Y_SCALE
+    pre_forward_quantizer = ForwardTokenizer(input_bit, 8)
+    LinearType='W8A8B8O8Linear'
+    if x_scale is None:
+        layer, sample_input = uniform_dtype((layer, sample_input), dtype=torch.float32)
+        y_gt = layer(sample_input)
+        y_scale = y_gt.abs().max() / 127
+        inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='torch_int', LinearType=LinearType)
+    else:
+        inner_layer = construct_quantized_linear(layer, kernel_bit, x_scale=x_scale, y_scale=y_scale, constructor='torch_int', LinearType=LinearType)
+    # print("Choosen LinearType: ", LinearType)
+    after_forward_quantizer = ForwardTokenizer(8, output_bit, y_scale)
+    return inner_layer, pre_forward_quantizer, after_forward_quantizer
+
 # Usually, this happens after we already got the best precision for the kernels
 # then we knows the former precision of the input and output
 # the tokenizer alwasy works for only CUTLASS KERNELS
 def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
                             sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
                             device_cap=70, output_bit=16):
-    after_forward_quantizer = None
-    pre_forward_quantizer = None
-    if device_cap <= 70 or kernel_bit < 8 or (sample_input is None and x_scale is None): # CUTLASS is not allowed / bit < 8 / no sample input
-        # use GPTQ, GPTQ is a weight only quantization method, no tokenizer is needed
+    layer_type = 'FP16'
+    # deal with the case > 8 bit
+    if kernel_bit >= 16:
+        inner_layer = layer.to(torch.float16) # use fp16 by default
+        # do nothing
+        return inner_layer, None, None, layer_type
+    Q_METHOD = os.environ.get('Q_METHOD')
+    # print("Q_METHOD: ", Q_METHOD, kernel_bit)
+    if Q_METHOD == 'GPTQ':
         inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
-    elif kernel_bit == 8:
-        # CUTLASS OP IS AVAILABLE
-        # Cal Y_SCALE
-        pre_forward_quantizer = ForwardTokenizer(input_bit, 8)
-        LinearType='W8A8B8O8Linear'
-        if x_scale is None:
-            layer, sample_input = uniform_dtype((layer, sample_input), dtype=torch.float32)
-            y_gt = layer(sample_input)
-            y_scale = y_gt.abs().max() / 127
-            inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='torch_int', LinearType=LinearType)
-        else:
-            inner_layer = construct_quantized_linear(layer, kernel_bit, x_scale=x_scale, y_scale=y_scale, constructor='torch_int', LinearType=LinearType)
-        # print("Choosen LinearType: ", LinearType)
-        after_forward_quantizer = ForwardTokenizer(8, output_bit, y_scale)
+        layer_type = 'GPTQ'
+        return inner_layer, None, None, layer_type
+    elif Q_METHOD == 'TORCH_INT':
+        if device_cap <= 70:
+            # can't use torch_int
+            return layer, None, None, layer_type
+        # same to ADA
+        layer_type = 'TORCH_INT'
+        inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
+                                                                                        sample_input, x_scale, y_scale, output_bit)
+        return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
+    elif Q_METHOD == 'BITSANDBYTES':
+        layer_type = 'BITSANDBYTES'
+        inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='bitsandbytes')
+        return inner_layer, None, None, layer_type
     else:
-        # other precision is not required to do anything
-        # we use fp16 by default
-        inner_layer = layer.to(torch.float16)
-    return inner_layer, pre_forward_quantizer, after_forward_quantizer
+        # ADALINEAR
+        after_forward_quantizer = None
+        pre_forward_quantizer = None
+        if device_cap <= 70 or kernel_bit < 8 or (sample_input is None and x_scale is None): # CUTLASS is not allowed / bit < 8 / no sample input
+            # use GPTQ, GPTQ is a weight only quantization method, no tokenizer is needed
+            layer_type = 'GPTQ'
+            inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
+        elif kernel_bit == 8:
+            # use torch int
+            layer_type = 'TORCH_INT'
+            inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
+                                                                                            sample_input, x_scale, y_scale, \
+                                                                                            output_bit)
+        else:
+            # other precision is not required to do anything
+            # we use fp16 by default
+            inner_layer = layer.to(torch.float16)
+        return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
 
 class AdaQLinear(nn.Module):
     def __init__(self, layer:nn.Module, input_bit:int, kernel_bit:int, \
                  sample_input:torch.Tensor=None, x_scale=None, y_scale=None, \
                  device_cap:int=70):
         super().__init__()
+        is_available_bit(kernel_bit)
         self.input_bit = input_bit
         self.kernel_bit = kernel_bit
 
@@ -120,16 +162,19 @@ class AdaQLinear(nn.Module):
         self.pre_tokenizer_dispatch = False
         self.after_tokenizer_dispatch = False
 
+        layer_type = 'FP16'
         assert sample_input is not None or (x_scale is not None and y_scale is not None), "Either sample_input or x_scale and y_scale is required"
         if x_scale is not None and y_scale is not None:
-            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = \
+            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
                 construct_inner_kernel(layer, input_bit, kernel_bit, x_scale=x_scale, y_scale=y_scale, device_cap=device_cap)
         if sample_input is not None:
             # make sure sample is fp16
             sample_input = sample_input.to(torch.float16)
             # construct the inner layer
-            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = \
+            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
                 construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, device_cap=device_cap)
+        
+        self.layer_type = layer_type
         
     def dispatch_pre_tokenizer(self):
         if self.pre_forward_quantizer:

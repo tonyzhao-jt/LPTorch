@@ -8,6 +8,7 @@ import bitsandbytes as bnb
 from bitsandbytes.nn.modules import Linear8bitLt
 
 from .utils import uniform_dtype
+from .config import is_available_bit
 
 def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
     quantizer = Quantizer()
@@ -71,6 +72,7 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
 def construct_quantized_linear(layer:nn.Module, bit:int, constructor:str='gptq', \
                                sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, LinearType='W8A8B8O8Linear'):
     assert isinstance(layer, nn.Linear), "Only support linear layer"
+    is_available_bit(bit)
     if constructor is None or bit < 8:
         # only gptq support bit < 8
         constructor = gptq_constructor
