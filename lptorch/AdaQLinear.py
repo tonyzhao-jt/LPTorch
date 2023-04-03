@@ -54,13 +54,22 @@ class ForwardTokenizer(nn.Module):
             # if output_bit == 32:
             #     self.tokenizer = lambda x: x.float()
             if input_bit == output_bit and input_bit == 8:
-                self.tokenizer = lambda x: x # empty function
+                # self.tokenizer = lambda x: x # empty function
+                self.tokenizer = self.empty_fwd
+                self.tokenizer_type = "empty"
             else:
                 # force converting to FP16. This is the default behavior
-                self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
-            self.tokenizer_type = "empty"
+                # self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
+                self.tokenizer = self.to_fp16
+                self.tokenizer_type = "to_fp16"
         
         self.y_scale = y_scale
+    
+    def empty_fwd(self, x):
+        return x 
+
+    def to_fp16(self, x):
+        return x.to(torch.float16)
     
     def int8_to_fp16(self, x):
         q_y = (x * self.y_scale).to(torch.float16)
