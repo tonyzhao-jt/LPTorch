@@ -30,6 +30,12 @@ def test_set_QType():
     ic(time_ada_1)
     ic(ada_linear_1.layer_type)
 
+    ada_linear_4 = AdaQLinear(linear, 16, 16, x_scale=x_scale, y_scale=y_scale)
+    time_ada_4, ref_out3 = perf_utils.run_on_cuda(sample_x, ada_linear_4, x_dtype=torch.float32)
+    ic(time_ada_4)
+    ic(ada_linear_4.layer_type)
+    ic(ref_out3.dtype)
+
     set_q_method('GPTQ')
     ada_linear_2 = AdaQLinear(linear, 16, 4, x_scale=x_scale, y_scale=y_scale)
     time_ada_2, ref_out1 = perf_utils.run_on_cuda(sample_x, ada_linear_2, x_dtype=torch.float16)
@@ -39,7 +45,7 @@ def test_set_QType():
     print(ada_linear_2.inner_layer.qweight.shape)
 
     ada_linear_3 = AdaQLinear(linear, 16, 8, x_scale=x_scale, y_scale=y_scale)
-    time_ada_3, ref_out2 = perf_utils.run_on_cuda(sample_x, ada_linear_3, x_dtype=torch.float32)
+    time_ada_3, ref_out2 = perf_utils.run_on_cuda(sample_x, ada_linear_3, x_dtype=torch.float16)
     # time_ada_3, ref_out2 = perf_utils.run_on_cuda(sample_x, ada_linear_3, x_dtype=torch.float16)
     ic(time_ada_3)
     ic(ada_linear_3.layer_type)
@@ -47,7 +53,7 @@ def test_set_QType():
     print(ada_linear_3.inner_layer.qweight.shape)
     print(torch.max(ref_out2 - ref_out1))
     print(torch.max(ref_out2 - ref_out))
-    
+
 
 
 if __name__ == "__main__":

@@ -51,6 +51,8 @@ class ForwardTokenizer(nn.Module):
             self.tokenizer = self.fp16_to_int8
             self.tokenizer_type = "fp16_to_int8"
         else:
+            # if output_bit == 32:
+            #     self.tokenizer = lambda x: x.float()
             if input_bit == output_bit and input_bit == 8:
                 self.tokenizer = lambda x: x # empty function
             else:
@@ -126,7 +128,7 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
     else:
         # ADALINEAR
         after_forward_quantizer = None
-        pre_forward_quantizer = None
+        pre_forward_quantizer = ForwardTokenizer(input_bit, 16) # always convert to fp16
         if device_cap <= 70 or kernel_bit < 8 or (sample_input is None and x_scale is None): # CUTLASS is not allowed / bit < 8 / no sample input
             # use GPTQ, GPTQ is a weight only quantization method, no tokenizer is needed
             layer_type = 'GPTQ'
@@ -162,9 +164,18 @@ class AdaQLinear(nn.Module):
 
         layer_type = 'FP16'
         # deal with the case > 8 bit
+        # if kernel_bit == 32:
+        #     layer_type = 'FP32'
+        #     # do nothing
+        #     inner_layer = layer.to(torch.float32)
+        #     pre_forward_quantizer = ForwardTokenizer(input_bit, 32)
+        #     # after_forward_quantizer = ForwardTokenizer(32, 32)
+        #     self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = inner_layer, pre_forward_quantizer, None
         if kernel_bit >= 16:
             inner_layer = layer.to(torch.float16) # use fp16 by default
-            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = inner_layer, None, None
+            pre_forward_quantizer = ForwardTokenizer(input_bit, 16)
+            # after_forward_quantizer = ForwardTokenizer(16, 16)
+            self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer = inner_layer, pre_forward_quantizer, None
         else:
             if sample_input is not None:
                 # make sure sample is fp16
@@ -197,7 +208,24 @@ class AdaQLinear(nn.Module):
         if not self.after_tokenizer_dispatch and self.after_forward_quantizer:
             output = self.after_forward_quantizer(output)
         return output
-    
+
+def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, name="ada_linear"):
+    assert isinstance(child, nn.Linear), "Only support linear layer" 
+    x_scale, y_scale = None, None
+    sample_input = None
+    layer_name = name
+    if caliber is not None:
+        calib_d_1 = caliber.get_module_calib_data(child)
+        if calib_d_1 is not None:
+            if type(calib_d_1) == list and len(calib_d_1) == 2:
+                x_scale, y_scale = calib_d_1
+            else:
+                sample_input = calib_d_1
+            layer_name = child.unique_id
+    ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale)
+    ada_qli.name = layer_name
+    return ada_qli
+
 # iteratively quantize all linear in the module
 def quantize_linear_module_with_bit(module, kernel_bit=8, caliber=None, input_bit=16):
     def quantize_linear_inner(module):
@@ -205,19 +233,7 @@ def quantize_linear_module_with_bit(module, kernel_bit=8, caliber=None, input_bi
             if isinstance(child, AdaQLinear):
                 continue
             if isinstance(child, nn.Linear):
-                x_scale, y_scale = None, None
-                sample_input = None
-                layer_name = name
-                if caliber is not None:
-                    calib_d_1 = caliber.get_module_calib_data(child)
-                    if calib_d_1 is not None:
-                        if type(calib_d_1) == list and len(calib_d_1) == 2:
-                            x_scale, y_scale = calib_d_1
-                        else:
-                            sample_input = calib_d_1
-                        layer_name = child.unique_id
-                ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale)
-                ada_qli.name = layer_name
+                ada_qli = quantize_one_linear_module(child, input_bit, kernel_bit, caliber, name=name)
                 setattr(module, name, ada_qli)
             quantize_linear_inner(child)
     quantize_linear_inner(module)

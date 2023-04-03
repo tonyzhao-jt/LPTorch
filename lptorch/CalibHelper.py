@@ -76,6 +76,8 @@ class CalibHelper:
             hook.remove()
     
     def get_module_calib_data(self, module):
+        if not hasattr(module, 'unique_id'):
+            return None
         if module.unique_id not in self.collected_calib_data:
             return None
         return self.collected_calib_data[module.unique_id]

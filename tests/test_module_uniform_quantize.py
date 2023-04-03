@@ -1,4 +1,4 @@
-from lptorch import CalibHelper, quantize_linear_module_with_bit
+from lptorch import CalibHelper, quantize_linear_module_with_bit, quantize_one_linear_module
 from lptorch.AdaQLinear import print_all_qli_status_in_module
 from lptorch.utils import perf_utils
 from lptorch import set_q_method
@@ -35,6 +35,10 @@ def test_set_module_bit():
     # first try quant without calib data
     quantize_linear_module_with_bit(seq_model, kernel_bit=8, caliber=caliber)
     print_all_qli_status_in_module(seq_model)
+
+    one_li = nn.Linear(M, N, bias=True)
+    ada_li = quantize_one_linear_module(one_li, kernel_bit=8, caliber=caliber)
+    ic(ada_li)
 
 
 if __name__ == "__main__":
