@@ -1,5 +1,5 @@
 import torch
-from .._CUDA import bmm_s8t_s8n_s8t, bmm_s8t_s8n_s32t, bmm_s8t_s8n_f32t
+from lptorch.torch_int._CUDA import bmm_s8t_s8n_s8t, bmm_s8t_s8n_s32t, bmm_s8t_s8n_f32t
 
 
 class BMM_S8T_S8N_S8T(torch.nn.Module):

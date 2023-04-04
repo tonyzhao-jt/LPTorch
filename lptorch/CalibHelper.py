@@ -15,6 +15,7 @@ def get_first_output(output):
 class CalibHelper:
     def __init__(self, model:nn.Module=None) -> None:
         self.forward_hook_targets = [nn.Linear, nn.Conv2d]
+        self.bs = 1
         if model is not None:
             self.set_model(model)
         pass
@@ -44,6 +45,7 @@ class CalibHelper:
         input_record = get_first_output(input)
         # running mean
         if unique_id not in self.collected_calib_data:
+            self.collected_input_shape[unique_id] = input_record.shape
             self.collected_calib_data[unique_id] = input_record.detach().cpu() # store in cpu
         else:
             self.collected_calib_data[unique_id] = 0.9 * self.collected_calib_data[unique_id] + 0.1 * input_record.detach().cpu()
@@ -57,6 +59,7 @@ class CalibHelper:
         y_scale = y_gt.abs().max() / 127
         # running mean
         if unique_id not in self.collected_calib_data:
+            self.collected_input_shape[unique_id] = x.shape
             self.collected_calib_data[unique_id] = [x_scale.detach().cpu(), y_scale.detach().cpu()]  # store in cpu
         else:
             self.collected_calib_data[unique_id] = [0.9 * self.collected_calib_data[unique_id][0] + 0.1 * x_scale.detach().cpu(), 
@@ -70,6 +73,7 @@ class CalibHelper:
                 hook = layer.register_forward_hook(self.default_hook)
                 self.fwd_hooks.append(hook)
         self.collected_calib_data = {}
+        self.collected_input_shape = {}
 
     def remove_forward_hooks(self):
         for hook in self.fwd_hooks:
@@ -81,19 +85,41 @@ class CalibHelper:
         if module.unique_id not in self.collected_calib_data:
             return None
         return self.collected_calib_data[module.unique_id]
+
+    def set_bs(self, bs):
+        self.bs = bs
+
+    def get_module_input_shape(self, module):
+        if not hasattr(module, 'unique_id'):
+            return None
+        if module.unique_id not in self.collected_input_shape:
+            return None
+        shape_input = self.collected_input_shape[module.unique_id]
+        # if the first shape is 1, then multiply the first dim value with bs
+        if shape_input[0] == 1:
+            shape_input = [self.bs] + list(shape_input[1:])
+        return shape_input
+
     
     def clear_calib_data(self):
         self.collected_calib_data = {}
+        self.collected_input_shape = {}
 
     # Hanlde the distributed case
     # The calib data collection may be decoupled with the quantization. 
     def save_calib_data(self, path="./calib_data.pkl"):
-        torch.save(self.collected_calib_data, path)
+        save_result = {
+            "input_shape": self.collected_input_shape,
+            "calib_data": self.collected_calib_data
+        }
+        torch.save(save_result, path)
         pass
 
     # load calib data from disk
     def load_calib_data(self, path="./calib_data.pkl"):
-        self.collected_calib_data = torch.load(path)
+        load_result = torch.load(path)
+        self.collected_input_shape = load_result["input_shape"]
+        self.collected_calib_data = load_result["calib_data"]
         pass
 
     def set_module_calib_data_to_module(self):

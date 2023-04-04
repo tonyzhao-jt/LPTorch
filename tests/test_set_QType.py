@@ -54,6 +54,16 @@ def test_set_QType():
     print(torch.max(ref_out2 - ref_out1))
     print(torch.max(ref_out2 - ref_out))
 
+    # int8 test for torch_int
+    if cap >= 75:
+        set_q_method('torch_int')
+        ada_linear_4 = AdaQLinear(linear, 16, 8, x_scale=x_scale, y_scale=y_scale, output_bit=8)
+        time_ada_4, ref_out4 = perf_utils.run_on_cuda(sample_x, ada_linear_4, x_dtype=torch.float16)
+        # time_ada_3, ref_out2 = perf_utils.run_on_cuda(sample_x, ada_linear_3, x_dtype=torch.float16)
+        ic(time_ada_4)
+        ic(ada_linear_4.layer_type)
+        ic(ref_out4.dtype)
+
 
 
 if __name__ == "__main__":

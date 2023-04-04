@@ -144,3 +144,7 @@ def get_capability():
     device_0 = device[0].strip()
     capability = query_cc(device_0)
     return capability
+
+def is_tensorcore_int8_available():
+    capability = get_capability()
+    return capability >= 75 # only for A100,T4,H100

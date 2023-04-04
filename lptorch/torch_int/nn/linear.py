@@ -1,5 +1,5 @@
 import torch
-from .._CUDA import (linear_a8_w8_b32_o32,
+from lptorch.torch_int._CUDA import (linear_a8_w8_b32_o32,
                      linear_relu_a8_w8_b8_o8,
                      linear_a8_w8_b8_o8,
                      linear_a8_w8_b32_o32_with_scaling,

@@ -93,10 +93,9 @@ class ForwardTokenizer(nn.Module):
 
 def construct_torch_int(layer:nn.Module, input_bit:int, kernel_bit:int, \
                             sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
-                            output_bit=16):
+                            output_bit=16, LinearType='W8A8B8O8Linear'):
     # Cal Y_SCALE
     pre_forward_quantizer = ForwardTokenizer(input_bit, 8)
-    LinearType='W8A8B8O8Linear'
     if x_scale is None:
         layer, sample_input = uniform_dtype((layer, sample_input), dtype=torch.float32)
         y_gt = layer(sample_input)
@@ -113,7 +112,7 @@ def construct_torch_int(layer:nn.Module, input_bit:int, kernel_bit:int, \
 # the tokenizer alwasy works for only CUTLASS KERNELS
 def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
                             sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
-                            device_cap=70, output_bit=16):
+                            device_cap=70, output_bit=16, LinearType='W8A8B8O8Linear'):
     layer_type = 'FP16'
     Q_METHOD = os.environ.get('Q_METHOD')
     # print("Q_METHOD: ", Q_METHOD, kernel_bit)
@@ -126,9 +125,10 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
             # can't use torch_int
             return layer, None, None, layer_type
         # same to ADA
-        layer_type = 'TORCH_INT'
+        layer_type = 'TORCH_INT:' + LinearType
         inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
-                                                                                        sample_input, x_scale, y_scale, output_bit)
+                                                                                            sample_input, x_scale, y_scale, output_bit,\
+                                                                                            LinearType=LinearType)
         return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
     elif Q_METHOD == 'BITSANDBYTES':
         layer_type = 'BITSANDBYTES'
@@ -144,10 +144,10 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
             inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
         elif kernel_bit == 8:
             # use torch int
-            layer_type = 'TORCH_INT'
+            layer_type = 'TORCH_INT:' + LinearType
             inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
                                                                                             sample_input, x_scale, y_scale, \
-                                                                                            output_bit)
+                                                                                            output_bit, LinearType=LinearType)
         else:
             # other precision is not required to do anything
             # we use fp16 by default
@@ -155,8 +155,9 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
         return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
 
 class AdaQLinear(nn.Module):
-    def __init__(self, layer:nn.Module, input_bit:int, kernel_bit:int, \
-                 sample_input:torch.Tensor=None, x_scale=None, y_scale=None):
+    def __init__(self, layer:nn.Module, input_bit:int, kernel_bit:int,\
+                 sample_input:torch.Tensor=None, x_scale=None, y_scale=None,
+                 output_bit:int=16, LinearType='W8A8B8O8Linear'):
         super().__init__()
         is_available_bit(kernel_bit)
         device_cap = get_capability()
@@ -191,7 +192,8 @@ class AdaQLinear(nn.Module):
                 sample_input = sample_input.to(torch.float16)
                 # construct the inner layer
             self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
-                construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale, device_cap=device_cap)
+                construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, \
+                                        y_scale=y_scale, device_cap=device_cap, output_bit=output_bit, LinearType=LinearType)
         
         self.layer_type = layer_type
     
@@ -218,7 +220,7 @@ class AdaQLinear(nn.Module):
             output = self.after_forward_quantizer(output)
         return output
 
-def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, name="ada_linear"):
+def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, name="ada_linear", output_bit:int=16, LinearType='W8A8B8O8Linear'):
     assert isinstance(child, nn.Linear), "Only support linear layer" 
     x_scale, y_scale = None, None
     sample_input = None
@@ -231,7 +233,7 @@ def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, 
             else:
                 sample_input = calib_d_1
             layer_name = child.unique_id
-    ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale)
+    ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale, output_bit=output_bit, LinearType=LinearType)
     ada_qli.name = layer_name
     return ada_qli
 
