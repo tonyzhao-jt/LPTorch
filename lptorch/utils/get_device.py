@@ -148,3 +148,7 @@ def get_capability():
 def is_tensorcore_int8_available():
     capability = get_capability()
     return capability >= 75 # only for A100,T4,H100
+
+def is_tensorcore_int8_available_offline(device_0):
+    capability = query_cc(device_0)
+    return capability >= 75 # only for A100,T4,H100
