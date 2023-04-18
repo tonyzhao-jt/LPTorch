@@ -15,6 +15,7 @@ def test_ada_linear():
     qx = (sample_x / x_scale).round().to(torch.int8)
     # sample output
     y_gt = linear(sample_x)
+    y_scale = y_gt.abs().max() / 127
 
     # only INT8 this case
     bit = 8
@@ -54,7 +55,7 @@ def test_ada_linear():
     # AdaQLinear
     input_bit = 8
     kernel_bit = 8
-    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x)
+    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, y_scale=y_scale)
     # print(ada_linear.pre_forward_quantizer if ada_linear.pre_forward_quantizer is not None else 'None')
     ada_linear_time_8, ref_out = perf_utils.run_on_cuda(qx, ada_linear, x_dtype=torch.int8)
     ic(ada_linear_time_8)
@@ -111,7 +112,7 @@ def test_different_gptq():
     # gptq
     for bit in bits:
         gptq_linear = construct_quantized_linear(linear, bit, sample_x, constructor='gptq')
-        gptq_time, ref_out = perf_utils.run_on_cuda(qx, gptq_linear, x_dtype=torch.float16)
+        gptq_time, ref_out = perf_utils.run_on_cuda(sample_x, gptq_linear, x_dtype=torch.float16)
         ic(gptq_time)
 
 if __name__ == '__main__':

@@ -4,10 +4,17 @@ import torch.nn as nn
 from .gptq.nn import QuantLinear, Quantizer, quantize
 from .torch_int.nn import W8A16Linear
 from .torch_int.nn.linear import W8A8BFP32OFP32Linear, W8A8B8O8Linear, W8A8B8O8LinearReLU
+
+# handle T4. in the future, fully replace the torchint
+from .lptorch.nn import W8A16Linear as LPW8A16Linear
+from .lptorch.nn.linear import W8A8BFP32OFP32Linear as LPW8A8BFP32OFP32Linear
+from .lptorch.nn.linear import W8A8B8O8Linear as LPW8A8B8O8Linear
+from .lptorch.nn.linear import W8A8B8O8LinearReLU as LPW8A8B8O8LinearReLU
+
 import bitsandbytes as bnb
 from bitsandbytes.nn.modules import Linear8bitLt
 
-from .utils import uniform_dtype
+from .utils import uniform_dtype, get_capability
 from .config import is_available_bit
 
 def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
@@ -24,17 +31,18 @@ def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
 
 
 def torch_int_constructor_withscale(layer:nn.Module, bit:int, x_scale, y_scale, LinearType='W8A8B8O8Linear'):
+    cap = get_capability()
     if LinearType == 'W8A8B8O8Linear':
-        QLinearType = W8A8B8O8Linear
+        QLinearType = W8A8B8O8Linear if cap > 75 else LPW8A8B8O8Linear
         q_linear = QLinearType.from_float(layer, x_scale, y_scale)
     elif LinearType == 'W8A8B8O8LinearReLU':
-        QLinearType = W8A8B8O8LinearReLU
+        QLinearType = W8A8B8O8LinearReLU if cap > 75 else LPW8A8B8O8LinearReLU
         q_linear = QLinearType.from_float(layer, x_scale, y_scale) 
     elif LinearType == 'W8A8BFP32OFP32Linear':
-        QLinearType = W8A8BFP32OFP32Linear
+        QLinearType = W8A8BFP32OFP32Linear if cap > 75 else LPW8A8BFP32OFP32Linear
         q_linear = QLinearType.from_float(layer, x_scale)
     elif LinearType == 'W8A16Linear':
-        QLinearType = W8A16Linear
+        QLinearType = W8A16Linear if cap > 75 else LPW8A16Linear
         q_linear = QLinearType.from_float(layer)
     else:
         q_linear = layer # didn't do anything
