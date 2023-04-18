@@ -2,7 +2,7 @@
 # write a forward hook to automatically collect the data.
 import torch 
 import torch.nn as nn 
-
+import uuid
 # handle output in tuple, if tuple, only get the first result
 def get_first_output(output):
     if type(output) == tuple:
@@ -19,6 +19,14 @@ class CalibHelper:
         if model is not None:
             self.set_model(model)
         pass
+
+        self.collected_calib_data = {}
+        self.collected_input_shape = {}
+        
+        # some case calib is also not available, use fake to fake the calib data
+        self.fake = False
+        self.named_fake_calib_data = {}
+        self.named_fake_input_shape = {}
     
     def set_model(self, model):
         self.assign_unique_id_to_all_layers(model)
@@ -78,6 +86,50 @@ class CalibHelper:
     def remove_forward_hooks(self):
         for hook in self.fwd_hooks:
             hook.remove()
+    
+    # some cases the calib of the whole model is also not available
+    # but we just want to test the performance of the whole model
+    # this case, we provides a dict to store fake calib_data manually.
+    # e.g. collect the FFN input calib and SELFATTN calib. Then use it to broadcast to all models
+    def set_fake(self):
+        self.fake = True
+    
+    def turn_off_fake(self):
+        self.fake = False
+        self.named_fake_calib_data = {}
+        self.named_fake_input_shape = {}
+
+    def set_fake_module_calib_data(self, module_name, calib_input_shape, calib_result):
+        assert self.fake, "only under fake mode can set calib data"
+        self.named_fake_calib_data[module_name] = calib_result
+        self.named_fake_input_shape[module_name] = calib_input_shape
+
+    def save_fake_calib_data(self, path="./fake_calib_data.pkl"):
+        saved_data = {
+            "named_fake_calib_data": self.named_fake_calib_data,
+            "named_fake_input_shape": self.named_fake_input_shape
+        }
+        # use pickle
+        torch.save(saved_data, path)
+    
+    def load_fake_calib_data(self, path="./fake_calib_data.pkl"):
+        saved_data = torch.load(path)
+        self.named_fake_calib_data = saved_data["named_fake_calib_data"]
+        self.named_fake_input_shape = saved_data["named_fake_input_shape"]
+
+    # mannually set unique id
+    def man_set_unique_id(self, module):
+        # use uuid
+        unique_id = str(uuid.uuid4())
+        module.unique_id = unique_id
+        return unique_id
+    
+    def man_set_module_calib_data(self, module, calib_result):
+        self.collected_calib_data[module.unique_id] = calib_result
+    
+    '''
+    get the calib data of a module=====================
+    '''
     
     def get_module_calib_data(self, module):
         if not hasattr(module, 'unique_id'):
