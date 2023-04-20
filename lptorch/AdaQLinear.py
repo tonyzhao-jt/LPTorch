@@ -68,17 +68,27 @@ class ForwardTokenizer(nn.Module):
     def empty_fwd(self, x):
         return x 
 
+    @torch.no_grad()
     def to_fp16(self, x):
         return x.to(torch.float16)
     
+
+    @torch.no_grad()
     def int8_to_fp16(self, x):
         q_y = (x * self.y_scale).to(torch.float16)
         return q_y
 
-    def fp16_to_int8(self, x):
-        x_scale = x.abs().max() / 127
-        qx = (x / x_scale).round().to(torch.int8)
-        return qx
+    @torch.no_grad()
+    def fp16_to_int8(self, t):
+        scale = t.abs().max() / 127
+        if not t.is_cuda:
+            # half rounding is not supported on CPU
+            t = t.float()
+        # use inplace operation to save memory
+        t.div_(scale).round_()
+        t_q = t.to(torch.int8)
+        # return t_q, scale
+        return t_q # TODO: make lptorch support scale later.
     
     @torch.no_grad()
     def forward(self, x):
