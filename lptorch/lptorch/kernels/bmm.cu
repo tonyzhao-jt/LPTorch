@@ -130,7 +130,7 @@ torch::Tensor bmm_s8t_s8n_s8t(torch::Tensor A, torch::Tensor B, float alpha) {
   size_t workspace_size = Gemm::get_workspace_size(arguments);
 
   // Allocate workspace memory
-  cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
+  auto workspace = torch::empty({static_cast<int64_t>(workspace_size)}, torch::dtype(torch::kUInt8).device(A.device()));
 
   // Check the problem size is supported or not
   cutlass::Status status = gemm_op.can_implement(arguments);
@@ -139,7 +139,7 @@ torch::Tensor bmm_s8t_s8n_s8t(torch::Tensor A, torch::Tensor B, float alpha) {
   }
 
   // Initialize CUTLASS kernel with arguments and workspace pointer
-  status = gemm_op.initialize(arguments, workspace.get());
+  status = gemm_op.initialize(arguments, workspace.data_ptr<uint8_t>());
   if (status != cutlass::Status::kSuccess) {
     throw std::runtime_error("cutlass cannot initialize");
   }
