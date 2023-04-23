@@ -1,4 +1,4 @@
-AVAILABLE_BITS = [2, 4, 8, 16]
+AVAILABLE_BITS = [2, 3, 4, 8, 16]
 AVAILABLE_Q_METHODS = ['ADA', 'GPTQ', 'TORCH_INT', 'BITSANDBYTES']
 
 def is_available_bit(bit):

@@ -111,11 +111,11 @@ def test_different_gptq():
     # test different cases
     # gptq
     for bit in bits:
-        gptq_linear = construct_quantized_linear(linear, bit, sample_x, constructor='gptq')
+        gptq_linear = construct_quantized_linear(linear, bit, sample_input=sample_x, constructor='gptq')
         gptq_time, ref_out = perf_utils.run_on_cuda(sample_x, gptq_linear, x_dtype=torch.float16)
         ic(gptq_time)
 
 if __name__ == '__main__':
     test_ada_linear()
-    # test_different_gptq()
+    test_different_gptq()
     # test_quantizer_dispatcher()
