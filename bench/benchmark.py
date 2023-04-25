@@ -7,7 +7,7 @@ from icecream import ic
 @torch.no_grad()
 def test_ada_linear():
     # sample case
-    B, M, N = 128, 512, 1024
+    B, M, N = 2048, 1024, 1024
     # sample_x, qx, and sample linear
     sample_x = torch.randn(B, M)
     x_scale = sample_x.abs().max() / 127
@@ -116,6 +116,7 @@ def test_different_gptq():
         ic(gptq_time)
 
 if __name__ == '__main__':
+    torch.cuda.set_device(0) # set device to invoke cudaSetDevice(device_id) make sure the workspace is well allocated.
     test_ada_linear()
     test_different_gptq()
     # test_quantizer_dispatcher()

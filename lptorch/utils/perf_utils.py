@@ -21,7 +21,7 @@ def run_on_cuda(input_x, linear, x_dtype=None, cnt_times=100):
     # time
     start = time_perf_cuda()
     for _ in range(cnt_times):
-        linear(input_x)
+        ref_out = linear(input_x)
     torch.cuda.synchronize()
     end = time_perf_cuda()
     return (end - start) / cnt_times, ref_out

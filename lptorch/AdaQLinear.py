@@ -47,9 +47,11 @@ class ForwardTokenizer(nn.Module):
             assert y_scale is not None, "y_scale is required for int8 to fp16"
             self.tokenizer = self.int8_to_fp16
             self.tokenizer_type = "int8_to_fp16"
+            self.y_scale = nn.Parameter(torch.tensor(y_scale.numpy(), dtype=torch.float16))
         elif input_bit == 16 and output_bit == 8:
             self.tokenizer = self.fp16_to_int8
             self.tokenizer_type = "fp16_to_int8"
+            self.y_scale = None
         else:
             # if output_bit == 32:
             #     self.tokenizer = lambda x: x.float()
@@ -57,13 +59,13 @@ class ForwardTokenizer(nn.Module):
                 # self.tokenizer = lambda x: x # empty function
                 self.tokenizer = self.empty_fwd
                 self.tokenizer_type = "empty"
+                self.y_scale = None
             else:
                 # force converting to FP16. This is the default behavior
                 # self.tokenizer = lambda x: x.to(torch.float16) if x.is_cuda else x # convert input tensor to fp16 if on CUDA device
                 self.tokenizer = self.to_fp16
                 self.tokenizer_type = "to_fp16"
-        
-        self.y_scale = y_scale
+                self.y_scale = None
     
     def empty_fwd(self, x):
         return x 
@@ -72,10 +74,10 @@ class ForwardTokenizer(nn.Module):
     def to_fp16(self, x):
         return x.to(torch.float16)
     
-
     @torch.no_grad()
     def int8_to_fp16(self, x):
-        q_y = (x * self.y_scale).to(torch.float16)
+        x = x.to(torch.float16)
+        q_y = x * self.y_scale
         return q_y
 
     @torch.no_grad()
@@ -85,7 +87,7 @@ class ForwardTokenizer(nn.Module):
             # half rounding is not supported on CPU
             t = t.float()
         # use inplace operation to save memory
-        t.div_(scale).round_()
+        t.div_(scale).clamp_(-127, 127).round_()
         t_q = t.to(torch.int8)
         # return t_q, scale
         return t_q # TODO: make lptorch support scale later.
@@ -153,9 +155,14 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
             layer_type = 'GPTQ'
             inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
         elif kernel_bit == 8:
-            # use torch int
-            layer_type = 'TORCH_INT:' + LinearType
-            inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
+            # if input bit =16 use bitsandsbytes
+            if input_bit == 16:
+                layer_type = 'BITSANDBYTES'
+                inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='bitsandbytes')
+            else:
+                # use torch int
+                layer_type = 'TORCH_INT:' + LinearType
+                inner_layer, pre_forward_quantizer, after_forward_quantizer = construct_torch_int(layer, input_bit, kernel_bit, \
                                                                                             sample_input, x_scale, y_scale, \
                                                                                             output_bit, LinearType=LinearType)
         else:

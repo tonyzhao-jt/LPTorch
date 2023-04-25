@@ -74,6 +74,7 @@ class CalibHelper:
                                                     0.9 * self.collected_calib_data[unique_id][1] + 0.1 * y_scale.detach().cpu()]
         return output
     
+    
     def register_forward_hooks(self):
         self.fwd_hooks = []
         for layer_id, layer in self.id_to_layer.items():
