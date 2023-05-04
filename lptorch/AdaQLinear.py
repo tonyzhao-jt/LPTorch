@@ -1,6 +1,6 @@
 import torch 
 from torch import nn 
-
+import torch.distributed as dist
 import os
 
 from .utils import uniform_dtype, get_capability
@@ -171,10 +171,30 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
             inner_layer = layer.to(torch.float16)
         return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
 
+# tp related
+from . import tp 
+import dataclasses
+@dataclasses.dataclass
+class AdaQTPConfig:
+    split_k: int
+    rank_index: int
+    split_type: str
+    comm_group = None
+
+    def __init__(self, split_k: int, rank_index: int, split_type: str = "COLUMN", comm_group = None):
+        self.split_k = split_k
+        self.rank_index = rank_index
+        self.split_type = split_type
+        self.comm_group = comm_group
+
+
+
+
+from .utils import partition_a_into_b_bins
 class AdaQLinear(nn.Module):
     def __init__(self, layer:nn.Module, input_bit:int, kernel_bit:int,\
                  sample_input:torch.Tensor=None, x_scale=None, y_scale=None,
-                 output_bit:int=16, LinearType='W8A8B8O8Linear'):
+                 output_bit:int=16, LinearType='W8A8B8O8Linear', **kwargs):
         super().__init__()
         is_available_bit(kernel_bit)
         device_cap = get_capability()
@@ -188,6 +208,11 @@ class AdaQLinear(nn.Module):
         # indicators
         self.pre_tokenizer_dispatch = False
         self.after_tokenizer_dispatch = False
+
+        # add shard support here
+        tp_config = kwargs.get('tp_config', None)
+        if tp_config is not None:
+            layer = self.shard_layer(layer, tp_config)
 
         layer_type = 'FP16'
         # deal with the case > 8 bit
@@ -214,6 +239,69 @@ class AdaQLinear(nn.Module):
         
         self.layer_type = layer_type
     
+    # Used in TP: Load weight later.
+    # COLUMN: shard_weight by the second dimension. 
+    # ROW: shard_weight by the first dimension.
+    @torch.no_grad()
+    def shard_layer(self, layer:nn.Linear, tp_config: AdaQTPConfig):
+        k = tp_config.split_k
+        idx = tp_config.rank_index
+        shard_type = tp_config.split_type
+        comm_group = tp_config.comm_group
+        # shard the layer then return. 
+        in_features, out_features = layer.in_features, layer.out_features
+        if comm_group is not None:
+            layer = layer.cuda()
+        # weight is stored as out_features, in_features. (Transpose case)
+        if shard_type == 'COLUMN':
+            # shard by the second dimension
+            shard_size = partition_a_into_b_bins(out_features, k)[idx]
+            # create new linear layer
+            new_layer = nn.Linear(in_features, shard_size)
+            if comm_group is None:
+                # copy weight, bias
+                if idx == k - 1:
+                    new_layer.weight.data.copy_(layer.weight[idx*shard_size:, :])
+                    new_layer.bias.data.copy_(layer.bias[idx*shard_size:])
+                else:
+                    new_layer.weight.data.copy_(layer.weight[idx*shard_size:(idx+1)*shard_size, :])
+                    new_layer.bias.data.copy_(layer.bias[idx*shard_size:(idx+1)*shard_size])
+            else:
+                # communicate the weight
+                weight = layer.weight.detach()
+                bias = layer.bias.detach()
+                weight = tp._scatter_first_dim(weight, idx, k, group=comm_group)
+                bias = tp._scatter_first_dim(bias, idx, k, group=comm_group)
+                dist.barrier(group=comm_group)
+                new_layer.weight.data.copy_(weight.detach().cpu())
+                new_layer.bias.data.copy_(bias.detach().cpu())
+
+        elif shard_type == 'ROW':
+            # shard by the first dimension
+            shard_size = partition_a_into_b_bins(in_features, k)[idx]
+            # create new linear layer
+            new_layer = nn.Linear(shard_size, out_features)
+            # copy weight, bias
+            if comm_group is None:
+                if idx == k - 1:
+                    new_layer.weight.data.copy_(layer.weight[:, idx*shard_size:])
+                    new_layer.bias.data.copy_(layer.bias)
+                else:
+                    new_layer.weight.data.copy_(layer.weight[:, idx*shard_size:(idx+1)*shard_size])
+                    new_layer.bias.data.copy_(layer.bias)
+            else:
+                # communicate the weight
+                weight = layer.weight.detach()
+                bias = layer.bias.detach() / k
+                weight = tp._scatter_last_dim(weight, idx, k, comm_group)
+
+                dist.broadcast(bias, src=0, group=comm_group)
+                dist.barrier(group=comm_group)
+                new_layer.weight.data.copy_(weight.detach().cpu())
+                new_layer.bias.data.copy_(bias.detach().cpu())
+        
+        return new_layer
+    
     def print_status(self):
         # if layer name if has
         if hasattr(self, 'name'):
@@ -237,7 +325,7 @@ class AdaQLinear(nn.Module):
             output = self.after_forward_quantizer(output)
         return output
 
-def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, name="ada_linear", output_bit:int=16, LinearType='W8A8B8O8Linear'):
+def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, name="ada_linear", output_bit:int=16, LinearType='W8A8B8O8Linear', **kwargs):
     assert isinstance(child, nn.Linear), "Only support linear layer" 
     x_scale, y_scale = None, None
     sample_input = None
@@ -250,18 +338,18 @@ def quantize_one_linear_module(child, input_bit=16, kernel_bit=8, caliber=None, 
             else:
                 sample_input = calib_d_1
             layer_name = child.unique_id
-    ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale, output_bit=output_bit, LinearType=LinearType)
+    ada_qli = AdaQLinear(child, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, y_scale=y_scale, output_bit=output_bit, LinearType=LinearType, **kwargs)
     ada_qli.name = layer_name
     return ada_qli
 
 # iteratively quantize all linear in the module
-def quantize_linear_module_with_bit(module, kernel_bit=8, caliber=None, input_bit=16):
+def quantize_linear_module_with_bit(module, kernel_bit=8, caliber=None, input_bit=16, **kwargs):
     def quantize_linear_inner(module):
         for name, child in module.named_children():
             if isinstance(child, AdaQLinear):
                 continue
             if isinstance(child, nn.Linear):
-                ada_qli = quantize_one_linear_module(child, input_bit, kernel_bit, caliber, name=name)
+                ada_qli = quantize_one_linear_module(child, input_bit, kernel_bit, caliber, name=name, **kwargs)
                 setattr(module, name, ada_qli)
             quantize_linear_inner(child)
     quantize_linear_inner(module)

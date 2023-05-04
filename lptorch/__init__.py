@@ -1,8 +1,12 @@
 from . import gptq
 from . import torch_int
 from .extern_qlinear_constructor import construct_quantized_linear
-from .AdaQLinear import AdaQLinear, quantize_linear_module_with_bit, quantize_one_linear_module, ForwardTokenizer
+from .AdaQLinear import (
+    AdaQLinear, quantize_linear_module_with_bit, quantize_one_linear_module, ForwardTokenizer,
+    AdaQTPConfig
+)
 from .CalibHelper import CalibHelper
+from . import tp 
 
 from .config import is_available_q_method
 from ._globals import inner_caliber
