@@ -201,6 +201,9 @@ class AdaQLinear(nn.Module):
         self.input_bit = input_bit
         self.kernel_bit = kernel_bit
 
+        # flag paramters. help judge device and dtype
+        self.flag = nn.Parameter(torch.zeros(1), requires_grad=False)
+
         # tokenizers
         # PS. the tokenizer may need to be iterable to the input, be careful for this case later.
         self.pre_forward_quantizer = None
@@ -255,7 +258,7 @@ class AdaQLinear(nn.Module):
         # weight is stored as out_features, in_features. (Transpose case)
         if shard_type == 'COLUMN':
             # shard by the second dimension
-            shard_size = partition_a_into_b_bins(out_features, k)[idx]
+            shard_size = tp.divide(out_features, k)
             # create new linear layer
             new_layer = nn.Linear(in_features, shard_size)
             if comm_group is None:
@@ -278,7 +281,7 @@ class AdaQLinear(nn.Module):
 
         elif shard_type == 'ROW':
             # shard by the first dimension
-            shard_size = partition_a_into_b_bins(in_features, k)[idx]
+            shard_size = tp.divide(in_features, k) 
             # create new linear layer
             new_layer = nn.Linear(shard_size, out_features)
             # copy weight, bias
