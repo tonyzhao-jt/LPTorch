@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn 
 from icecream import ic
 import copy
-
+import os 
 @torch.no_grad()
 def test_set_QType_sharded():
     cap = get_capability()
@@ -34,8 +34,12 @@ def test_set_QType_sharded():
     seq_mod = seq_mod.cuda()
     print(seq_mod(sample_x).shape)
 
+    # assert "RANK" in os.environ, "RANK is not set"
+    # rank = os.environ["RANK"]
+    # local_rank = os.environ["LOCAL_RANK"]
+
     # column wise case
-    tp_config = AdaQTPConfig(split_k=2, rank_index=0, split_type='COLUMN')
+    tp_config = AdaQTPConfig(split_k=2, global_rank=0, tp_index=0, split_type='COLUMN')
     seq_mod = copy.deepcopy(seq_mod_)
     quantize_linear_module_with_bit(seq_mod, kernel_bit=8, caliber=caliber, tp_config=tp_config)
     sample_x = sample_x.cuda()
@@ -44,8 +48,8 @@ def test_set_QType_sharded():
 
     # partitiom sample_x along the second dimension
     sample_x = sample_x.cuda()
-    sample_x = sample_x.chunk(tp_config.split_k, dim=1)[tp_config.rank_index]
-    tp_config = AdaQTPConfig(split_k=2, rank_index=0, split_type='ROW')
+    sample_x = sample_x.chunk(tp_config.split_k, dim=1)[tp_config.tp_index]
+    tp_config = AdaQTPConfig(split_k=2, global_rank=1, tp_index=1, split_type='ROW')
     seq_mod = copy.deepcopy(seq_mod_)
     quantize_linear_module_with_bit(seq_mod, kernel_bit=8, caliber=caliber, tp_config=tp_config)
     seq_mod = seq_mod.cuda()

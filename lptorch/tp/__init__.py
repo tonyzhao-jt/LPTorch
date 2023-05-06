@@ -28,8 +28,9 @@ def divide(numerator, denominator):
 '''
     for col-wise
 '''
-def _broad_cast(tensor, group):
-    dist.broadcast(tensor, src=0, group=group)
+def _broad_cast(tensor, global_rank, index, group):
+    src_rank = global_rank - index
+    dist.broadcast(tensor, src=src_rank, group=group)
     return tensor
 
 def _all_gather(tensor, index, split_k, group):
@@ -45,7 +46,7 @@ def _all_gather(tensor, index, split_k, group):
 '''
     for row-wise
 '''
-def _scatter_last_dim(tensor, index, split_k, group):
+def _scatter_last_dim(tensor, global_rank, index, split_k, group):
     tensor_size = tensor.size()
     last_dim = tensor.dim() - 1
     last_dim_size = divide(tensor.size()[last_dim], split_k)
@@ -57,10 +58,11 @@ def _scatter_last_dim(tensor, index, split_k, group):
     sliced_tensor_size = (*tensor_size[:-1], last_dim_size)
     dtype = tensor.dtype
     sliced_x = torch.empty(sliced_tensor_size, dtype=dtype, device=tensor.device)
-    dist.scatter(sliced_x, tensor_list, src=0, group=group)
+    src_rank = global_rank - index
+    dist.scatter(sliced_x, tensor_list, src=src_rank, group=group)
     return sliced_x
 
-def _scatter_first_dim(tensor, index, split_k, group):
+def _scatter_first_dim(tensor, global_rank, index, split_k, group):
     tensor_size = tensor.size()
     first_dim = 0
     first_dim_size = divide(tensor.size()[first_dim], split_k)
@@ -72,7 +74,8 @@ def _scatter_first_dim(tensor, index, split_k, group):
     sliced_tensor_size = (first_dim_size, *tensor_size[1:])
     dtype = tensor.dtype
     sliced_x = torch.empty(sliced_tensor_size, dtype=dtype, device=tensor.device)
-    dist.scatter(sliced_x, tensor_list, src=0, group=group)
+    src_rank = global_rank - index
+    dist.scatter(sliced_x, tensor_list, src=src_rank, group=group)
     return sliced_x
 
 def _all_reduce(tensor, group, op=dist.ReduceOp.SUM):

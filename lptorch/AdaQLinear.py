@@ -177,17 +177,17 @@ import dataclasses
 @dataclasses.dataclass
 class AdaQTPConfig:
     split_k: int
-    rank_index: int
+    global_rank: int
+    tp_index: int
     split_type: str
     comm_group = None
 
-    def __init__(self, split_k: int, rank_index: int, split_type: str = "COLUMN", comm_group = None):
+    def __init__(self, split_k: int, global_rank:int, tp_index: int, split_type: str = "COLUMN", comm_group = None):
         self.split_k = split_k
-        self.rank_index = rank_index
+        self.global_rank = global_rank
+        self.tp_index = tp_index
         self.split_type = split_type
         self.comm_group = comm_group
-
-
 
 
 from .utils import partition_a_into_b_bins
@@ -248,7 +248,8 @@ class AdaQLinear(nn.Module):
     @torch.no_grad()
     def shard_layer(self, layer:nn.Linear, tp_config: AdaQTPConfig):
         k = tp_config.split_k
-        idx = tp_config.rank_index
+        global_rank = tp_config.global_rank
+        idx = tp_config.tp_index
         shard_type = tp_config.split_type
         comm_group = tp_config.comm_group
         # shard the layer then return. 
@@ -273,8 +274,9 @@ class AdaQLinear(nn.Module):
                 # communicate the weight
                 weight = layer.weight.detach()
                 bias = layer.bias.detach()
-                weight = tp._scatter_first_dim(weight, idx, k, group=comm_group)
-                bias = tp._scatter_first_dim(bias, idx, k, group=comm_group)
+                weight = tp._scatter_first_dim(weight, global_rank, idx, k, group=comm_group)
+                dist.barrier(group=comm_group)
+                bias = tp._scatter_first_dim(bias, global_rank, idx, k, group=comm_group)
                 dist.barrier(group=comm_group)
                 new_layer.weight.data.copy_(weight.detach().cpu())
                 new_layer.bias.data.copy_(bias.detach().cpu())
@@ -296,9 +298,9 @@ class AdaQLinear(nn.Module):
                 # communicate the weight
                 weight = layer.weight.detach()
                 bias = layer.bias.detach() / k
-                weight = tp._scatter_last_dim(weight, idx, k, comm_group)
-
-                dist.broadcast(bias, src=0, group=comm_group)
+                weight = tp._scatter_last_dim(weight, global_rank, idx, k, comm_group)
+                dist.barrier(group=comm_group)
+                tp._broad_cast(bias, global_rank, idx, comm_group)
                 dist.barrier(group=comm_group)
                 new_layer.weight.data.copy_(weight.detach().cpu())
                 new_layer.bias.data.copy_(bias.detach().cpu())
