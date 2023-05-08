@@ -262,48 +262,57 @@ class AdaQLinear(nn.Module):
             shard_size = tp.divide(out_features, k)
             # create new linear layer
             new_layer = nn.Linear(in_features, shard_size)
+            bias = layer.bias
             if comm_group is None:
                 # copy weight, bias
                 if idx == k - 1:
                     new_layer.weight.data.copy_(layer.weight[idx*shard_size:, :])
-                    new_layer.bias.data.copy_(layer.bias[idx*shard_size:])
+                    if bias is not None:
+                        new_layer.bias.data.copy_(layer.bias[idx*shard_size:])
                 else:
                     new_layer.weight.data.copy_(layer.weight[idx*shard_size:(idx+1)*shard_size, :])
-                    new_layer.bias.data.copy_(layer.bias[idx*shard_size:(idx+1)*shard_size])
+                    if bias is not None:
+                        new_layer.bias.data.copy_(layer.bias[idx*shard_size:(idx+1)*shard_size])
             else:
                 # communicate the weight
                 weight = layer.weight.detach()
-                bias = layer.bias.detach()
                 weight = tp._scatter_first_dim(weight, global_rank, idx, k, group=comm_group)
                 dist.barrier(group=comm_group)
-                bias = tp._scatter_first_dim(bias, global_rank, idx, k, group=comm_group)
-                dist.barrier(group=comm_group)
                 new_layer.weight.data.copy_(weight.detach().cpu())
-                new_layer.bias.data.copy_(bias.detach().cpu())
+
+                if bias is not None:
+                    bias = layer.bias.detach()
+                    bias = tp._scatter_first_dim(bias, global_rank, idx, k, group=comm_group)
+                    dist.barrier(group=comm_group)
+                    new_layer.bias.data.copy_(bias.detach().cpu())
 
         elif shard_type == 'ROW':
             # shard by the first dimension
             shard_size = tp.divide(in_features, k) 
             # create new linear layer
             new_layer = nn.Linear(shard_size, out_features)
+            bias = layer.bias
             # copy weight, bias
             if comm_group is None:
                 if idx == k - 1:
                     new_layer.weight.data.copy_(layer.weight[:, idx*shard_size:])
-                    new_layer.bias.data.copy_(layer.bias)
+                    if bias is not None:
+                        new_layer.bias.data.copy_(layer.bias)
                 else:
                     new_layer.weight.data.copy_(layer.weight[:, idx*shard_size:(idx+1)*shard_size])
-                    new_layer.bias.data.copy_(layer.bias)
+                    if bias is not None:
+                        new_layer.bias.data.copy_(layer.bias)
             else:
                 # communicate the weight
                 weight = layer.weight.detach()
-                bias = layer.bias.detach() / k
                 weight = tp._scatter_last_dim(weight, global_rank, idx, k, comm_group)
                 dist.barrier(group=comm_group)
-                tp._broad_cast(bias, global_rank, idx, comm_group)
-                dist.barrier(group=comm_group)
                 new_layer.weight.data.copy_(weight.detach().cpu())
-                new_layer.bias.data.copy_(bias.detach().cpu())
+                if bias is not None:
+                    bias = layer.bias.detach() / k
+                    tp._broad_cast(bias, global_rank, idx, comm_group)
+                    new_layer.bias.data.copy_(bias.detach().cpu())
+                dist.barrier(group=comm_group)
         
         return new_layer
     
