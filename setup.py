@@ -59,7 +59,10 @@ setup(
     },
     packages=find_packages(
         exclude=['notebook', 'scripts', 'tests', 'bench']),
+    package_data={
+        'lptorch': ['utils/device_info.csv'],
+    },
     install_requires=[
-        'icecream',
+        'icecream', 'pandas'
     ],
 )
