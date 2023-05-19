@@ -3,7 +3,7 @@ def init_weight_bias_with_rand(module):
     if hasattr(module, 'weight'):
         weight_shape = module.weight.shape
         w_dtype = module.weight.dtype
-        if w_dtype == torch.float32 or torch.float16:
+        if w_dtype == torch.float32 or w_dtype == torch.float16:
             torch.nn.init.uniform_(module.weight)
         else:
             # int8
@@ -18,7 +18,7 @@ def init_weight_bias_with_rand(module):
             return
         bias_shape = module.bias.shape
         b_dtype = module.bias.dtype
-        if b_dtype == torch.float32 or torch.float16:
+        if b_dtype == torch.float32 or b_dtype == torch.float16:
             torch.nn.init.uniform_(module.bias)
         else:
             # int8

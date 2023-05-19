@@ -7,7 +7,7 @@ DEVICE_INFO.set_index("device_name", inplace = True)
 
 ALIAS_DICT = {
     "A100": ["A100-SXM4-40GB", "NVIDIA_A100-SXM4-40GB", "A100_Graphics_Device", "A100-SXM-80GB"],
-    "V100": ["Tesla_V100-SXM2-32GB", "Tesla_V100-PCIE-32GB", "Tesla_V100-SXM2-16GB"],
+    "V100": ["Tesla_V100-SXM2-32GB", "Tesla_V100-PCIE-32GB", "Tesla_V100-SXM2-16GB", "TESLA_V100-PCIE-16GB"],
     "T4": ["Tesla_T4"],
     "A100-SXM4-40GB_1g_5gb": [],
     "A100-SXM4-40GB_2g_10gb": [],
