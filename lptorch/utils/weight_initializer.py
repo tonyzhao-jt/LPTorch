@@ -8,7 +8,7 @@ def init_weight_bias_with_rand(module):
         else:
             # int8
             if w_dtype == torch.int8:
-                torch.randint(-127, 127, weight_shape, dtype=w_dtype, device=module.weight.device, out=module.weight)
+                torch.randint(-8, 8, weight_shape, dtype=w_dtype, device=module.weight.device, out=module.weight)
             else:
                 raise NotImplementedError
     
@@ -23,6 +23,6 @@ def init_weight_bias_with_rand(module):
         else:
             # int8
             if b_dtype == torch.int8:
-                torch.randint(-127, 127, bias_shape, dtype=b_dtype, device=module.bias.device, out=module.bias)
+                torch.randint(-8, 8, bias_shape, dtype=b_dtype, device=module.bias.device, out=module.bias)
             else:
                 raise NotImplementedError

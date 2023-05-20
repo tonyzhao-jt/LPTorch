@@ -9,6 +9,8 @@
 #include <cutlass/numeric_types.h>
 #include <cutlass/util/host_tensor.h>
 
+
+
 // used by out_proj and fc2, return INT32
 torch::Tensor linear_a8_w8_b32_o32(torch::Tensor input,  // INT8
                                    torch::Tensor weight, // INT8
@@ -282,9 +284,12 @@ torch::Tensor linear_a8_w8_bfp32_ofp32(torch::Tensor input,  // INT8
     throw std::runtime_error("cutlass cannot initialize");
   }
 
-  status = gemm_op();
+  int device_index = input.get_device();
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream(device_index);
+  status = gemm_op(stream);
   if (status != cutlass::Status::kSuccess) {
-    throw std::runtime_error("cutlass cannot run");
+    auto cutlass_err = cutlass::cutlassGetStatusString(status);
+    throw std::runtime_error(cutlass_err);
   }
 
   return out;
@@ -373,7 +378,9 @@ torch::Tensor linear_a8_w8_b8_o8(torch::Tensor input,  // INT8
     throw std::runtime_error("cutlass cannot initialize");
   }
 
-  status = gemm_op();
+  int device_index = input.get_device();
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream(device_index);
+  status = gemm_op(stream);
   if (status != cutlass::Status::kSuccess) {
     throw std::runtime_error("cutlass cannot run");
   }

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ namespace cutlass {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Optionally enable GCC's built-in type
-#if defined(__x86_64) && !defined(__CUDA_ARCH__) && defined(__GNUC__)
+#if (defined(__x86_64) || defined (__aarch64__)) && !defined(__CUDA_ARCH__) && defined(__GNUC__)
 #define CUTLASS_UINT128_NATIVE
 #elif defined(_MSC_VER) && defined(_M_AMD64) && !defined(__CUDA_ARCH__)
 #define CUTLASS_INT128_ARITHMETIC

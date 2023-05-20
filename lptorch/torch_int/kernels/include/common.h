@@ -6,6 +6,7 @@
 #include <cuda_fp16.h>
 #include <iostream>
 #include <torch/torch.h>
+#include <c10/cuda/CUDACachingAllocator.h>
 
 
 #endif // !COMMON

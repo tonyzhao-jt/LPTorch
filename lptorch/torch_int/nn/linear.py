@@ -211,7 +211,7 @@ class W8A8BFP32OFP32Linear(torch.nn.Module):
         x = x.view(-1, x_shape[-1])
         self.bias = self.bias.to(torch.float32)
         y = linear_a8_w8_bfp32_ofp32(
-            x, self.weight, self.bias, self.a.item(), 1)
+            x, self.weight, self.bias, self.a.item(), 1.0)
         y = y.view(*x_shape[:-1], -1)
         return y
 
