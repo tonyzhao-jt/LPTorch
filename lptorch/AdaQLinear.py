@@ -150,7 +150,7 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
         # ADALINEAR
         after_forward_quantizer = None
         pre_forward_quantizer = ForwardTokenizer(input_bit, 16, y_scale=y_scale) # always convert to fp16
-        if device_cap <= 70 or kernel_bit < 8 or (sample_input is None and x_scale is None): # CUTLASS is not allowed / bit < 8 / no sample input
+        if kernel_bit < 8 or (sample_input is None and x_scale is None): # CUTLASS is not allowed / bit < 8 / no sample input
             # use GPTQ, GPTQ is a weight only quantization method, no tokenizer is needed
             layer_type = 'GPTQ'
             inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
