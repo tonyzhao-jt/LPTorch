@@ -6,7 +6,7 @@ DEVICE_INFO = pd.read_csv(os.path.join(os.path.dirname(__file__), "device_info.c
 DEVICE_INFO.set_index("device_name", inplace = True)
 
 ALIAS_DICT = {
-    "A100": ["A100-SXM4-40GB", "NVIDIA_A100-SXM4-40GB", "A100_Graphics_Device", "A100-SXM-80GB"],
+    "A100": ["A100-SXM4-40GB", "NVIDIA_A100-SXM4-40GB", "A100_Graphics_Device", "A100-SXM-80GB", "NVIDIA_A100-SXM4-80GB"], # TODO: A100 80G is different from 40G in bandwidth, fixed later.
     "V100": ["Tesla_V100-SXM2-32GB", "Tesla_V100-PCIE-32GB", "Tesla_V100-SXM2-16GB", "TESLA_V100-PCIE-16GB"],
     "T4": ["Tesla_T4"],
     "A100-SXM4-40GB_1g_5gb": [],
