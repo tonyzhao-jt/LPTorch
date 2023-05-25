@@ -16,8 +16,14 @@ from bitsandbytes.nn.modules import Linear8bitLt
 
 from .utils import uniform_dtype, get_capability
 from .config import is_available_bit
-
+import os 
+from .utils import init_weight_bias_with_rand, init_weight_bias_with_rand_GPTQ
 def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
+    perf_mode = os.environ.get('PERF_MODE', False) == "1"
+    qlayer = QuantLinear(bit, -1, layer.in_features, layer.out_features)
+    if perf_mode:
+        init_weight_bias_with_rand_GPTQ(qlayer)
+        return qlayer
     quantizer = Quantizer()
     quantizer.configure(bit, perchannel=True, sym=False, mse=False)
     quantizer.find_params(layer.weight.data, weight=True)
@@ -25,27 +31,49 @@ def gptq_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
         layer.weight.data, quantizer.scale, quantizer.zero, quantizer.maxq
     )
     # group size by default = -1
-    qlayer = QuantLinear(bit, -1, layer.in_features, layer.out_features)
     qlayer.pack(layer, quantizer.scale, quantizer.zero)
     return qlayer
 
 
 def torch_int_constructor_withscale(layer:nn.Module, bit:int, x_scale, y_scale, LinearType='W8A8B8O8Linear'):
     cap = get_capability()
-    if LinearType == 'W8A8B8O8Linear':
-        QLinearType = W8A8B8O8Linear if cap > 75 else LPW8A8B8O8Linear
-        q_linear = QLinearType.from_float(layer, x_scale, y_scale)
-    elif LinearType == 'W8A8B8O8LinearReLU':
-        QLinearType = W8A8B8O8LinearReLU if cap > 75 else LPW8A8B8O8LinearReLU
-        q_linear = QLinearType.from_float(layer, x_scale, y_scale) 
-    elif LinearType == 'W8A8BFP32OFP32Linear':
-        QLinearType = W8A8BFP32OFP32Linear if cap > 75 else LPW8A8BFP32OFP32Linear
-        q_linear = QLinearType.from_float(layer, x_scale)
-    elif LinearType == 'W8A16Linear':
-        QLinearType = W8A16Linear if cap > 75 else LPW8A16Linear
-        q_linear = QLinearType.from_float(layer)
+    perf_mode = os.environ.get('PERF_MODE', False) == "1"
+    if not perf_mode:
+        if LinearType == 'W8A8B8O8Linear':
+            QLinearType = W8A8B8O8Linear if cap > 75 else LPW8A8B8O8Linear
+            q_linear = QLinearType.from_float(layer, x_scale, y_scale)
+        elif LinearType == 'W8A8B8O8LinearReLU':
+            QLinearType = W8A8B8O8LinearReLU if cap > 75 else LPW8A8B8O8LinearReLU
+            q_linear = QLinearType.from_float(layer, x_scale, y_scale) 
+        elif LinearType == 'W8A8BFP32OFP32Linear':
+            QLinearType = W8A8BFP32OFP32Linear if cap > 75 else LPW8A8BFP32OFP32Linear
+            q_linear = QLinearType.from_float(layer, x_scale)
+        elif LinearType == 'W8A16Linear':
+            QLinearType = W8A16Linear if cap > 75 else LPW8A16Linear
+            q_linear = QLinearType.from_float(layer)
+        else:
+            q_linear = layer # didn't do anything
     else:
-        q_linear = layer # didn't do anything
+        in_features, out_features = layer.in_features, layer.out_features
+        if LinearType == 'W8A8B8O8Linear':
+            QLinearType = W8A8B8O8Linear if cap > 75 else LPW8A8B8O8Linear
+            q_linear = QLinearType(in_features, out_features)
+            init_weight_bias_with_rand(q_linear)
+        elif LinearType == 'W8A8B8O8LinearReLU':
+            QLinearType = W8A8B8O8LinearReLU if cap > 75 else LPW8A8B8O8LinearReLU
+            q_linear = QLinearType(in_features, out_features)
+            init_weight_bias_with_rand(q_linear)
+        elif LinearType == 'W8A8BFP32OFP32Linear':
+            QLinearType = W8A8BFP32OFP32Linear if cap > 75 else LPW8A8BFP32OFP32Linear
+            q_linear = QLinearType(in_features, out_features)
+            init_weight_bias_with_rand(q_linear)
+        elif LinearType == 'W8A16Linear':
+            QLinearType = W8A16Linear if cap > 75 else LPW8A16Linear
+            q_linear = QLinearType(in_features, out_features)
+            init_weight_bias_with_rand(q_linear)
+        else:
+            q_linear = layer # didn't do anything
+            
     return q_linear
 
 def torch_int_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None, LinearType='W8A8B8O8Linear'):
@@ -69,10 +97,12 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
     )
     linear_custom.state.force_no_igemmlt = True
 
-    linear_custom.weight = bnb.nn.Int8Params(
-        linear.weight.data.clone(), requires_grad=False, has_fp16_weights=False
-    ).to(linear.weight.dtype)
-    linear_custom.bias = linear.bias
+    perf_mode = os.environ.get('PERF_MODE', False) == "1"
+    if not perf_mode:
+        linear_custom.weight = bnb.nn.Int8Params(
+            linear.weight.data.clone(), requires_grad=False, has_fp16_weights=False
+        ).to(linear.weight.dtype)
+        linear_custom.bias = linear.bias
     return linear_custom
 
 

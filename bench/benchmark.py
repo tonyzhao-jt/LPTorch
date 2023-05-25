@@ -53,13 +53,13 @@ def test_ada_linear():
         ic(ref_out.dtype)
 
     # AdaQLinear
-    input_bit = 8
+    # input_bit = 8
     kernel_bit = 8
-    ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, y_scale=y_scale)
-    # print(ada_linear.pre_forward_quantizer if ada_linear.pre_forward_quantizer is not None else 'None')
-    ada_linear_time_8, ref_out = perf_utils.run_on_cuda(qx, ada_linear, x_dtype=torch.int8)
-    ic(ada_linear_time_8)
-    ic(ref_out.dtype)
+    # ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x, y_scale=y_scale)
+    # # print(ada_linear.pre_forward_quantizer if ada_linear.pre_forward_quantizer is not None else 'None')
+    # ada_linear_time_8, ref_out = perf_utils.run_on_cuda(qx, ada_linear, x_dtype=torch.int8)
+    # ic(ada_linear_time_8)
+    # ic(ref_out.dtype)
     
     input_bit = 16
     ada_linear = AdaQLinear(linear, input_bit, kernel_bit, sample_input=sample_x)

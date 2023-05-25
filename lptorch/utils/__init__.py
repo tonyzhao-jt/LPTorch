@@ -3,4 +3,4 @@ from .tensor_status import uniform_dtype
 from . import perf_utils
 from .module_status import get_model_size_cuda
 from .simple_partition import partition_a_into_b_bins
-from .weight_initializer import init_weight_bias_with_rand
+from .weight_initializer import init_weight_bias_with_rand, init_weight_bias_with_rand_GPTQ
