@@ -124,7 +124,7 @@ def construct_torch_int(layer:nn.Module, input_bit:int, kernel_bit:int, \
 # the tokenizer alwasy works for only CUTLASS KERNELS
 def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
                             sample_input:torch.Tensor=None, x_scale:torch.Tensor=None, y_scale:torch.Tensor=None, \
-                            device_cap=70, output_bit=16, LinearType='W8A8B8O8Linear'):
+                            device_cap=70, output_bit=16, LinearType='W8A8B8O8Linear', **kwargs):
     layer_type = 'FP16'
     Q_METHOD = os.environ.get('Q_METHOD')
     # print("Q_METHOD: ", Q_METHOD, kernel_bit)
@@ -156,7 +156,8 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
             inner_layer = construct_quantized_linear(layer, bit=kernel_bit, constructor='gptq')
         elif kernel_bit == 8:
             # if input bit =16 use bitsandsbytes
-            if input_bit == 16:
+            
+            if input_bit == 16 and kwargs.get('tc', None) is None:
                 layer_type = 'BITSANDBYTES'
                 inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='bitsandbytes')
             else:
@@ -238,7 +239,7 @@ class AdaQLinear(nn.Module):
                 # construct the inner layer
             self.inner_layer, self.pre_forward_quantizer, self.after_forward_quantizer, layer_type = \
                 construct_inner_kernel(layer, input_bit, kernel_bit, sample_input=sample_input, x_scale=x_scale, \
-                                        y_scale=y_scale, device_cap=device_cap, output_bit=output_bit, LinearType=LinearType)
+                                        y_scale=y_scale, device_cap=device_cap, output_bit=output_bit, LinearType=LinearType, **kwargs)
         
         self.layer_type = layer_type
     
