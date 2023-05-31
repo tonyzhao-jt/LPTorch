@@ -93,9 +93,9 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
         linear.out_features,
         linear.bias is not None,
         has_fp16_weights=False,
-        threshold=6.0,
+        threshold=0.0, # by default set 6.0, but is weight-only quantization.
     )
-    linear_custom.state.force_no_igemmlt = True
+    linear_custom.state.force_no_igemmlt = False # this option is also important to determine whether bitsandbytes is used kernel.
 
     perf_mode = os.environ.get('PERF_MODE', False) == "1"
     if not perf_mode:
