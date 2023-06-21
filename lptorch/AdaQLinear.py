@@ -1,10 +1,11 @@
 import torch 
-from torch import nn 
+from torch import Tensor, device, dtype, nn
 import torch.distributed as dist
 import os
-
+from typing import Optional, TypeVar, Union, overload
 from .utils import uniform_dtype, get_capability
 from .config import is_available_bit
+T = TypeVar("T", bound="torch.nn.Module")
 # implementation of self-qlinear: AdaQLinear
 # the adaint constructor supposed to
 # Dtype
@@ -144,8 +145,9 @@ def construct_inner_kernel(layer:nn.Module, input_bit:int, kernel_bit:int, \
         return inner_layer, pre_forward_quantizer, after_forward_quantizer, layer_type
     elif Q_METHOD == 'BITSANDBYTES':
         layer_type = 'BITSANDBYTES'
+        pre_forward_quantizer = ForwardTokenizer(input_bit, 16, y_scale=y_scale)
         inner_layer = construct_quantized_linear(layer, kernel_bit, sample_input=sample_input, constructor='bitsandbytes')
-        return inner_layer, None, None, layer_type
+        return inner_layer, pre_forward_quantizer, None, layer_type
     else:
         # ADALINEAR
         after_forward_quantizer = None
@@ -333,10 +335,10 @@ class AdaQLinear(nn.Module):
         return False
 
     def forward(self, input):
-        if not self.pre_tokenizer_dispatch and self.pre_forward_quantizer:
+        if self.pre_forward_quantizer is not None:
             input = self.pre_forward_quantizer(input)
         output = self.inner_layer(input)
-        if not self.after_tokenizer_dispatch and self.after_forward_quantizer:
+        if self.after_forward_quantizer is not None:
             output = self.after_forward_quantizer(output)
         return output
 

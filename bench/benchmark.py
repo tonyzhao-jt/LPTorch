@@ -3,7 +3,7 @@ from lptorch import construct_quantized_linear
 from lptorch.utils import get_capability, perf_utils
 from lptorch import AdaQLinear
 from icecream import ic
-
+import copy 
 @torch.no_grad()
 def test_ada_linear():
     # sample case
@@ -30,6 +30,7 @@ def test_ada_linear():
     bitsandbytes_time, ref_out = perf_utils.run_on_cuda(sample_x, bitsandbytes_linear, x_dtype=torch.float16)
     ic(bitsandbytes_time)
     ic(ref_out.dtype)
+    # print(bitsandbytes_linear.state)
     # torch_int
     # For torch_int, it has multiple types
     # including: W8A8B8O8Linear, W8A8B8O8LinearReLU, W8A8BFP32OFP32Linear, W8A16Linear
@@ -75,6 +76,30 @@ def test_ada_linear():
     ic(ref_out.dtype)
 
 @torch.no_grad()
+def test_other_q_implementations():
+    B, M, N = 2048, 1024, 1024
+    # sample_x, qx, and sample linear
+    sample_x = torch.randn(B, M)
+    x_scale = sample_x.abs().max() / 127
+    linear = torch.nn.Linear(M, N, bias=True)
+    groupsize=128
+    # other llm q kernels
+    from lptorch.config import EXTRA_METHODS
+    if 'awq' in EXTRA_METHODS:
+        print("run awq")
+        # from awq.quantize.quantizer import real_quantize_model_weight
+        # from awq.quantize.qmodule import WQLinear
+        # from awq.quantize.auto_scale import get_weight_scale
+        # awq_linear_c = copy.deepcopy(linear)
+        # q_config = {"zero_point": True, "q_group_size": groupsize}
+        # real_quantize_model_weight(
+        # awq_linear_c, w_bit=4, q_config=q_config, init_only=True)
+        # scales = get_weight_scale(linear.weight)
+        # zeros = torch.zeros(2)
+        # awq_linear_c = WQLinear.from_linear(linear, 4, groupsize, init_only=False, scales=scales, zeros=zeros)
+        # awq_time_81616, awq_ref_out = perf_utils.run_on_cuda(qx, awq_linear_c, x_dtype=torch.float16)
+
+@torch.no_grad()
 def test_quantizer_dispatcher():
     B, M, N = 128, 512, 1024
     # sample_x, qx, and sample linear
@@ -117,6 +142,7 @@ def test_different_gptq():
 
 if __name__ == '__main__':
     torch.cuda.set_device(0) # set device to invoke cudaSetDevice(device_id) make sure the workspace is well allocated.
-    test_ada_linear()
-    test_different_gptq()
+    # test_ada_linear()
+    # test_different_gptq()
+    test_other_q_implementations()
     # test_quantizer_dispatcher()

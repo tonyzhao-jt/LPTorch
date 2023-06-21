@@ -4,3 +4,9 @@
 [submodule "3rd_party/cutlass"]
 	path = 3rd_party/cutlass
 	url = https://github.com/NVIDIA/cutlass.git
+[submodule "3rd_party/llm-awq"]
+	path = 3rd_party/llm-awq
+	url = https://github.com/mit-han-lab/llm-awq.git
+[submodule "3rd_party/SpQR"]
+	path = 3rd_party/SpQR
+	url = https://github.com/Vahe1994/SpQR

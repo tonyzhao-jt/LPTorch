@@ -98,12 +98,11 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
     linear_custom.state.force_no_igemmlt = True # this option is also important to determine whether bitsandbytes is used kernel.
                                                 # in practice, superisingly, we found turn it off resulting in faster speed.
     # linear_custom.state.force_no_igemmlt = False # 
-    perf_mode = os.environ.get('PERF_MODE', False) == "1"
-    if not perf_mode:
-        linear_custom.weight = bnb.nn.Int8Params(
-            linear.weight.data.clone(), requires_grad=False, has_fp16_weights=False
-        ).to(linear.weight.dtype)
-        linear_custom.bias = linear.bias
+    linear_custom.weight = bnb.nn.Int8Params(
+        data=linear.weight.data.clone(), requires_grad=False, has_fp16_weights=False
+    ).to(linear.weight.dtype)
+    # linear_custom.weight.cuda(torch.cuda.current_device())
+    linear_custom.bias = linear.bias
     return linear_custom
 
 

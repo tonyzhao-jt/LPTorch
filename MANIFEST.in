@@ -1,1 +1,2 @@
 include lptorch/utils/device_info.csv
+include lptorch/config/extra_methods.json

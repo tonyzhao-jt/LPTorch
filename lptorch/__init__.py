@@ -8,6 +8,7 @@ from .AdaQLinear import (
 from .CalibHelper import CalibHelper
 from . import tp 
 
+from . import config
 from .config import is_available_q_method
 from ._globals import inner_caliber
 

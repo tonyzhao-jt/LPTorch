@@ -57,7 +57,7 @@ setup(
     packages=find_packages(
         exclude=['notebook', 'scripts', 'tests', 'bench']),
     package_data={
-        'lptorch': ['utils/device_info.csv'],
+        'lptorch': ['utils/device_info.csv', 'config/extra_methods.json'],
     },
     install_requires=[
         'icecream', 'pandas'
