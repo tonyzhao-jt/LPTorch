@@ -15,8 +15,8 @@ from ._globals import inner_caliber
 import os
 # SET DEFAULT QUANTIZATION METHOD
 os.environ.setdefault('Q_METHOD', 'ADA')
+os.environ.setdefault('LP_BITS_THRESHOLD', '0.6')
 Q_METHOD = os.environ.get('Q_METHOD')
-
 def set_q_method(method:str):
     method = method.upper()
     is_available_q_method(method)

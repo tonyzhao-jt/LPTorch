@@ -86,6 +86,7 @@ def torch_int_constructor(layer:nn.Module, bit:int, sample_input:torch.Tensor=No
 
 
 def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor=None):
+    threshold = float(os.environ.get('LP_BITS_THRESHOLD', '0.6'))
     # get layer weight dim
     linear = layer
     linear_custom = Linear8bitLt(
@@ -93,10 +94,9 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
         linear.out_features,
         linear.bias is not None,
         has_fp16_weights=False,
-        threshold=6.0, # by default set 6.0, but is weight-only quantization.
+        threshold=threshold, # by default set 6.0, but is weight-only quantization.
     )
-    linear_custom.state.force_no_igemmlt = True # this option is also important to determine whether bitsandbytes is used kernel.
-                                                # in practice, superisingly, we found turn it off resulting in faster speed.
+    linear_custom.state.force_no_igemmlt = True # just find using igemm with threshold won't resulting in any speed up but slower.
     # linear_custom.state.force_no_igemmlt = False # 
     linear_custom.weight = bnb.nn.Int8Params(
         data=linear.weight.data.clone(), requires_grad=False, has_fp16_weights=False
