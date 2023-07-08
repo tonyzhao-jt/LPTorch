@@ -96,6 +96,9 @@ def bitsandbytes_consttuctor(layer:nn.Module, bit:int, sample_input:torch.Tensor
         has_fp16_weights=False,
         threshold=threshold, # by default set 6.0, but is weight-only quantization.
     )
+    # cap = get_capability()
+    # if cap <= 70:
+    #     linear_custom.state.force_no_igemm = True # to avoid nan
     # linear_custom.state.force_no_igemmlt = True # 6.23: don't turn off the igemmlt, elsewise the performance will be bad.(easily cause nan)
     # linear_custom.state.force_no_igemmlt = False 
     linear_custom.weight = bnb.nn.Int8Params(
