@@ -6,6 +6,11 @@ A Torch Plugin That Support Low-Precision Kernel Implementation
 MUST RUN ON CUDA, MUST RUN ON CUDA, MUST RUN ON CUDA
 - you can initilzie the AdaQLinear in CPU but must run test on CUDA.
 
+For Capability < 70, go `3rd_party` and run 
+```bash
+    bash update_3rd.sh
+```
+to recompile the bitsandbytes, modify the CUDA if necessary. 
 
 # Support
 |Name|Precisions|Link| Desc |

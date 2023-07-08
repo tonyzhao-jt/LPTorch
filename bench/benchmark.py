@@ -142,7 +142,7 @@ def test_different_gptq():
 
 if __name__ == '__main__':
     torch.cuda.set_device(0) # set device to invoke cudaSetDevice(device_id) make sure the workspace is well allocated.
-    # test_ada_linear()
+    test_ada_linear()
     # test_different_gptq()
-    test_other_q_implementations()
+    # test_other_q_implementations()
     # test_quantizer_dispatcher()

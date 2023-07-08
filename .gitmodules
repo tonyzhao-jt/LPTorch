@@ -10,3 +10,6 @@
 [submodule "3rd_party/SpQR"]
 	path = 3rd_party/SpQR
 	url = https://github.com/Vahe1994/SpQR
+[submodule "3rd_party/bitsandbytes"]
+	path = 3rd_party/bitsandbytes
+	url = https://github.com/TimDettmers/bitsandbytes.git
