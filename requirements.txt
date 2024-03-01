@@ -2,3 +2,4 @@ icecream
 transformers
 accelerator
 bitsandbytes
+pandas
